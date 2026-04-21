@@ -12,22 +12,18 @@ import { useAuthStore } from "@/store/auth";
 // ── Live preview HTML builder (mirrors EmailTemplateService.buildHtml) ──
 function buildPreviewHtml(opts: {
   bodyColor: string; footerColor: string; greetingText: string;
-  bodyIntro: string; logoUrl: string;
+  bodyIntro: string;
 }): string {
   const bc = opts.bodyColor   || "#333333";
   const fc = opts.footerColor || "#666666";
   const gr = opts.greetingText || "Warm Greetings from Geojit Investments Ltd !";
   const bi = opts.bodyIntro   || "We hope your experience with Geojit Investments Ltd has been pleasant. We are herewith sending you your digitally signed contract note (PDF Document).";
 
-  const logo = opts.logoUrl?.trim()
-    ? `<div style="text-align:center;margin-bottom:16px;"><img src="${opts.logoUrl}" alt="Geojit Logo" style="max-width:200px;" /></div>\n`
-    : "";
-
   return `<!DOCTYPE html>
 <html>
 <head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
 <body style="font-family: Arial, sans-serif; font-size: 10pt; color: ${bc};">
-${logo}Dear [NAME],
+Dear [NAME],
 <br/><br/>
 ${gr}
 <br/><br/>
@@ -87,8 +83,6 @@ function buildAnnotatedSegments(t: EmailTemplate): Segment[] {
   const footerColor = t.footerColor || "#666666";
   const greeting    = t.greetingText || "Warm Greetings from Geojit Investments Ltd !";
   const bodyIntro   = t.bodyIntro   || "We hope your experience with Geojit Investments Ltd has been pleasant. We are herewith sending you your digitally signed contract note (PDF Document).";
-  const logoUrl     = t.logoUrl     || "";
-
   const segs: Segment[] = [];
   const fix = (text: string) => segs.push({ type: "fixed", text });
   const edit = (field: keyof TemplateFieldsRequest, label: string, value: string) =>
@@ -98,11 +92,6 @@ function buildAnnotatedSegments(t: EmailTemplate): Segment[] {
   edit("bodyColor", "Body Color", bodyColor);
   fix(`;">\n`);
 
-  if (logoUrl) {
-    fix(`<div style="text-align:center;margin-bottom:16px;"><img src="`);
-    edit("logoUrl", "Logo URL", logoUrl);
-    fix(`" alt="Geojit Logo" style="max-width:200px;" /></div>\n`);
-  }
 
   fix(`Dear [NAME],\n<br/><br/>\n`);
   edit("greetingText", "Greeting Text", greeting);
@@ -120,7 +109,7 @@ const FIELD_COLORS: Record<string, string> = {
   subject:      "bg-purple-100 text-purple-900 border-purple-300",
   greetingText: "bg-yellow-100 text-yellow-900 border-yellow-300",
   bodyIntro:    "bg-blue-100   text-blue-900   border-blue-300",
-  logoUrl:      "bg-teal-100   text-teal-900   border-teal-300",
+
   bodyColor:    "bg-orange-100 text-orange-900 border-orange-300",
   footerColor:  "bg-rose-100   text-rose-900   border-rose-300",
 };
@@ -138,7 +127,6 @@ export default function TemplatesPage() {
   const [subject,      setSubject]      = useState("");
   const [greetingText, setGreetingText] = useState("");
   const [bodyIntro,    setBodyIntro]    = useState("");
-  const [logoUrl,      setLogoUrl]      = useState("");
   const [bodyColor,    setBodyColor]    = useState("#333333");
   const [footerColor,  setFooterColor]  = useState("#666666");
 
@@ -161,10 +149,9 @@ export default function TemplatesPage() {
   useEffect(() => {
     if (template && !initialized) {
       setInitialized(true);
-      setSubject(template.subject ?? "");
+      setSubject(template.subject ?? "Contract Note - Geojit Investments Ltd");
       setGreetingText(template.greetingText ?? "Warm Greetings from Geojit Investments Ltd !");
       setBodyIntro(template.bodyIntro ?? "We hope your experience with Geojit Investments Ltd has been pleasant. We are herewith sending you your digitally signed contract note (PDF Document).");
-      setLogoUrl(template.logoUrl ?? "");
       setBodyColor(template.bodyColor ?? "#333333");
       setFooterColor(template.footerColor ?? "#666666");
     }
@@ -173,7 +160,7 @@ export default function TemplatesPage() {
   const { mutate: saveFields, isPending: saving } = useMutation({
     mutationFn: () => {
       if (!template) throw new Error("No template loaded");
-      const req: TemplateFieldsRequest = { subject, greetingText, bodyIntro, logoUrl, bodyColor, footerColor };
+      const req: TemplateFieldsRequest = { subject, greetingText, bodyIntro, bodyColor, footerColor };
       return templatesApi.updateFields(template.templateId, req);
     },
     onSuccess: () => {
@@ -224,7 +211,7 @@ export default function TemplatesPage() {
     );
   }
 
-  const liveTemplate: EmailTemplate = { ...template, subject, greetingText, bodyIntro, logoUrl, bodyColor, footerColor };
+  const liveTemplate: EmailTemplate = { ...template, subject, greetingText, bodyIntro, bodyColor, footerColor };
   const segs = buildAnnotatedSegments(liveTemplate);
 
   return (
@@ -301,7 +288,7 @@ export default function TemplatesPage() {
                   <span key={field} className={cn("px-2 py-0.5 rounded border text-[11px] font-medium", cls)}>
                     {field === "greetingText" ? "Greeting Text"
                      : field === "bodyIntro"   ? "Body Intro"
-                     : field === "logoUrl"     ? "Logo URL"
+                     : field === "logoUrl"     ? null
                      : field === "bodyColor"   ? "Body Color"
                      : field === "footerColor" ? "Footer Color"
                      : "Subject"}
@@ -322,6 +309,7 @@ export default function TemplatesPage() {
                 value={subject}
                 onChange={e => setSubject(e.target.value)}
                 disabled={!isEditor}
+                placeholder="Contract Note - Geojit Investments Ltd"
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#497cff]/20"
               />
             </div>
@@ -357,18 +345,11 @@ export default function TemplatesPage() {
               />
             </div>
 
-            {/* Field: Logo URL */}
-            <div>
-              <label className="field-label">
-                <span className={cn("px-1.5 py-0.5 rounded border text-[10px] font-bold mr-1.5", FIELD_COLORS.logoUrl)}>Logo URL</span>
-                Optional — image URL for a logo shown at the top of the email (leave blank to hide)
-              </label>
+            {/* Logo URL removed — original template has no logo */}
+            <div className="hidden">
               <input
                 type="url"
-                value={logoUrl}
-                onChange={e => setLogoUrl(e.target.value)}
-                disabled={!isEditor}
-                placeholder="https://example.com/logo.png"
+                disabled
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#497cff]/20"
               />
             </div>
@@ -448,7 +429,6 @@ export default function TemplatesPage() {
                     setSubject(template.subject ?? "");
                     setGreetingText(template.greetingText ?? "Warm Greetings from Geojit Investments Ltd !");
                     setBodyIntro(template.bodyIntro ?? "We hope your experience with Geojit Investments Ltd has been pleasant. We are herewith sending you your digitally signed contract note (PDF Document).");
-                    setLogoUrl(template.logoUrl ?? "");
                     setBodyColor(template.bodyColor ?? "#333333");
                     setFooterColor(template.footerColor ?? "#666666");
                   }}
@@ -479,7 +459,7 @@ export default function TemplatesPage() {
                 <span key={field} className={cn("px-2 py-0.5 rounded border font-medium", cls)}>
                   ■ {field === "greetingText" ? "Greeting Text"
                      : field === "bodyIntro"   ? "Body Intro"
-                     : field === "logoUrl"     ? "Logo URL"
+                     : field === "logoUrl"     ? null
                      : field === "bodyColor"   ? "Body Color"
                      : field === "footerColor" ? "Footer Color"
                      : "Subject"}
@@ -526,7 +506,7 @@ export default function TemplatesPage() {
                 Rendered email preview
               </div>
               <iframe
-                srcDoc={buildPreviewHtml({ bodyColor, footerColor, greetingText, bodyIntro, logoUrl })}
+                srcDoc={buildPreviewHtml({ bodyColor, footerColor, greetingText, bodyIntro })}
                 className="w-full h-[65vh] border-0"
                 sandbox="allow-same-origin"
                 title="Template preview"

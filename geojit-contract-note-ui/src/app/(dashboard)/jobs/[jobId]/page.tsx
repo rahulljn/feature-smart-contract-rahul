@@ -200,11 +200,12 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
 
           {/* 6 metric cards */}
           {(() => {
-            const total           = job.totalRecords ?? 0;
-            const pdfs            = job.pdfGeneratedCount ?? 0;
-            const confirmed       = job.emailDeliveredCount ?? 0;
-            const failed          = job.failureCount ?? 0;
-            const deliveryFailed  = Math.max(0, total - confirmed - failed);
+            const total          = job.totalRecords ?? 0;
+            const pdfs           = job.pdfGeneratedCount ?? 0;
+            const sent           = job.emailSentCount ?? 0;
+            const confirmed      = job.emailDeliveredCount ?? 0;
+            const failed         = job.failureCount ?? 0;
+            const deliveryFailed = (job.bounceCount ?? 0) + (job.emailFailedCount ?? 0);
             return (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 <div className="card p-4">
@@ -219,8 +220,8 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
                 </div>
                 <div className="card p-4">
                   <div className="text-[10px] text-emerald-600 uppercase font-bold tracking-wider mb-1">Emails sent</div>
-                  <div className="text-[26px] font-extrabold mono text-emerald-600 leading-none">{confirmed.toLocaleString()}</div>
-                  <div className="text-[10px] text-slate-400 mt-1.5">{total > 0 ? Math.round(confirmed / total * 100) : 0}% · Confirmed received</div>
+                  <div className="text-[26px] font-extrabold mono text-emerald-600 leading-none">{sent.toLocaleString()}</div>
+                  <div className="text-[10px] text-slate-400 mt-1.5">{total > 0 ? Math.round(sent / total * 100) : 0}% · {confirmed > 0 ? `${confirmed.toLocaleString()} confirmed` : "Dispatched to SES"}</div>
                 </div>
                 <div className="card p-4">
                   <div className="text-[10px] text-orange-600 uppercase font-bold tracking-wider mb-1">Delivery failed</div>
@@ -250,7 +251,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
               </div>
               <div className="flex justify-between text-[10px] text-slate-400 mt-2">
                 <span>{(job.pdfGeneratedCount ?? 0).toLocaleString()} PDFs created</span>
-                <span>{(job.emailDeliveredCount ?? 0).toLocaleString()} confirmed received</span>
+                <span>{(job.emailSentCount ?? 0).toLocaleString()} emails sent</span>
                 <span>{(job.bounceCount ?? 0).toLocaleString()} bounced</span>
               </div>
             </div>
@@ -361,9 +362,14 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
           {
             name: "Delivery confirmation",
             status: stepStatus(hasDelivery || hasBounce || isSettled, isRunning && hasEmailSent),
-            pill: (hasDelivery || hasBounce) ? "pill-ok" : isSettled ? "pill-warn" : "pill-neu",
-            pillText: (hasDelivery || hasBounce) ? "Tracking"
-              : isSettled ? `${(job.emailDeliveredCount ?? 0).toLocaleString()} confirmed`
+            pill: (hasDelivery || hasBounce) ? "pill-ok"
+              : isSettled && (job.emailDeliveredCount ?? 0) > 0 ? "pill-ok"
+              : isSettled ? "pill-ok"
+              : "pill-neu",
+            pillText: (job.emailDeliveredCount ?? 0) > 0
+              ? `${(job.emailDeliveredCount ?? 0).toLocaleString()} confirmed`
+              : isSettled
+              ? `${(job.emailSentCount ?? 0).toLocaleString()} dispatched`
               : "Waiting",
             desc: "Confirming delivery and recording any bounced addresses",
             icon: "mark_email_read",

@@ -52,6 +52,8 @@ public interface JobCustomerRepository extends JpaRepository<JobCustomer, Long> 
             @Param("segmentPattern") String segmentPattern
     );
 
+    Optional<JobCustomer> findBySesMessageId(String sesMessageId);
+
     long countByJob_JobId(UUID jobId);
 
     long countByJob_JobIdAndEmailStatus(UUID jobId, JobCustomer.EmailStatus status);

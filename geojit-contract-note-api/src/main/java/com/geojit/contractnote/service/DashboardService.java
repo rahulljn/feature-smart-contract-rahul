@@ -43,13 +43,14 @@ public class DashboardService {
 
         long totalPdfsGenerated = jobsInRange.stream().mapToLong(Job::getPdfGeneratedCount).sum();
         long totalEmailsSent    = jobsInRange.stream().mapToLong(Job::getEmailSentCount).sum();
-        long totalDelivered     = jobsInRange.stream().mapToLong(Job::getEmailDeliveredCount).sum();
+        long totalConfirmed     = jobsInRange.stream().mapToLong(Job::getEmailDeliveredCount).sum(); // SNS-backed delivery receipts
+        long totalDelivered     = totalEmailsSent; // primary "delivered" = sent (accepted by SES)
         long totalBounced       = jobsInRange.stream().mapToLong(Job::getEmailBouncedCount).sum();
         long totalFailed        = jobsInRange.stream().mapToLong(Job::getFailedCount).sum();
 
-        long emailTotal = totalDelivered + totalBounced;
-        double bounceRate   = emailTotal > 0 ? Math.round((double) totalBounced   / emailTotal * 10000.0) / 100.0 : 0;
-        double deliveryRate = emailTotal > 0 ? Math.round((double) totalDelivered  / emailTotal * 10000.0) / 100.0 : 0;
+        long emailTotal = totalEmailsSent + totalBounced;
+        double bounceRate   = emailTotal > 0 ? Math.round((double) totalBounced    / emailTotal * 10000.0) / 100.0 : 0;
+        double deliveryRate = emailTotal > 0 ? Math.round((double) totalEmailsSent / emailTotal * 10000.0) / 100.0 : 0;
 
         // Hourly activity — events grouped by hour for the date range
         List<HourlyActivity> hourlyActivity = buildHourlyActivity(startDateTime, endDateTime);
@@ -62,6 +63,7 @@ public class DashboardService {
                 .totalPdfsGenerated(totalPdfsGenerated)
                 .totalEmailsSent(totalEmailsSent)
                 .totalDelivered(totalDelivered)
+                .totalConfirmed(totalConfirmed)
                 .totalBounced(totalBounced)
                 .bounceRate(bounceRate)
                 .deliveryRate(deliveryRate)

@@ -35,7 +35,7 @@ public class EmailNotification implements RequestHandler<S3Event, String> {
     private static final Logger logger = LoggerFactory.getLogger(EmailNotification.class);
 
     // ── Template cache (survives across warm Lambda invocations) ─────────
-    private static final String TEMPLATE_BUCKET  = "geojit-email-templates";
+    private static final String TEMPLATE_BUCKET  = "geojit-email-templates-dev";
     private static final String TEMPLATE_KEY     = "active/contract-note.html";
     private static final long   CACHE_TTL_MS     = 15 * 60 * 1000L; // 15 minutes
     private static volatile String cachedHtml    = null;
@@ -81,7 +81,7 @@ public class EmailNotification implements RequestHandler<S3Event, String> {
                 s3Client.shutdown();
             } else {
 
-                sendMailSES(filePath, userMetadataMap, fileName[fileName.length - 1]);
+                sendMailSES(filePath, userMetadataMap, fileName[fileName.length - 1], s3Client);
                 File newfile = new File(filePath);
                 newfile.delete();
                 s3Client.shutdown();
@@ -99,7 +99,7 @@ public class EmailNotification implements RequestHandler<S3Event, String> {
 
     }
 
-    private void sendMailSES(String filePath, Map<String, String> userMetadataMap, String string) {
+    private void sendMailSES(String filePath, Map<String, String> userMetadataMap, String string, AmazonS3 s3Client) {
         // TODO Auto-generated method stub
 
         String json = null;
@@ -137,7 +137,7 @@ public class EmailNotification implements RequestHandler<S3Event, String> {
             metadataJson.put("dematlogId", "");
             metadataJson.put("clientType", "1");
 
-            htmlTemplate = resolveTemplate(metadataJson.optString("name"), s3Client);
+            htmlTemplate = resolveTemplate(metadataJson, s3Client);
             subject = "Contract Note - Geojit Investments Ltd";
 
             // sending mail
@@ -226,7 +226,8 @@ public class EmailNotification implements RequestHandler<S3Event, String> {
      *
      * Falls back to the hardcoded template if S3 is unreachable.
      */
-    private String resolveTemplate(String name, AmazonS3 s3Client) {
+    private String resolveTemplate(JSONObject meta, AmazonS3 s3Client) {
+        String name = meta.optString("name");
         long now = System.currentTimeMillis();
         if (cachedHtml == null || now > cacheExpiry) {
             try {
@@ -242,8 +243,19 @@ public class EmailNotification implements RequestHandler<S3Event, String> {
                 return getHtmlTemplate(name);
             }
         }
-        String customerName = (name != null && !name.isBlank()) ? name : "Customer";
-        return cachedHtml.replace("[NAME]", customerName);
+        String customerName  = (name != null && !name.isBlank()) ? name : "Customer";
+        String partyCode     = meta.optString("partycode", "");
+        String activityDate  = meta.optString("activityDate", "");
+        String documentNo    = meta.optString("documentNo", "");
+        String exchange      = meta.optString("exchange", "");
+
+        return cachedHtml
+                .replace("[NAME]",              customerName)
+                .replace("{{clientName}}",      customerName)
+                .replace("{{clientCode}}",      partyCode)
+                .replace("{{tradeDate}}",       activityDate)
+                .replace("{{contractNoteId}}", documentNo)
+                .replace("{{segment}}",         exchange);
     }
 
     public static String getHtmlTemplate(String name) {

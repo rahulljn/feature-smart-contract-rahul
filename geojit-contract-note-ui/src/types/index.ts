@@ -83,6 +83,7 @@ export interface DashboardMetrics {
   totalPdfsGenerated: number;
   totalEmailsSent: number;
   totalDelivered: number;
+  totalConfirmed: number;
   totalBounced: number;
   bounceRate: number;
   deliveryRate: number;
@@ -146,7 +147,6 @@ export interface EmailTemplate {
   // Editable field columns (added V14)
   greetingText?: string;
   bodyIntro?: string;
-  logoUrl?: string;
   bodyColor?: string;
   footerColor?: string;
 }
@@ -155,7 +155,6 @@ export interface TemplateFieldsRequest {
   subject: string;
   greetingText: string;
   bodyIntro: string;
-  logoUrl: string;
   bodyColor: string;
   footerColor: string;
 }

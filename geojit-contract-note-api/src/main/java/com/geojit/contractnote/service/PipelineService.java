@@ -140,7 +140,7 @@ public class PipelineService {
                             jc.setEmailSentAt(event.getEventTimestamp());
                             Object msgId = event.getPayload() != null ? event.getPayload().get("sesMessageId") : null;
                             if (msgId != null) jc.setSesMessageId(msgId.toString());
-                            // Do NOT increment emailSentCount here — only DELIVERY confirmation counts as "sent"
+                            jobRepository.incrementEmailSentCount(event.getJobId());
                         }
                         case EMAIL_FAILED -> {
                             jc.setEmailStatus(JobCustomer.EmailStatus.FAILED);
@@ -152,53 +152,69 @@ public class PipelineService {
                             jobRepository.incrementEmailFailedCount(event.getJobId());
                         }
                         case DELIVERY -> {
-                            jc.setEmailStatus(JobCustomer.EmailStatus.DELIVERED);
-                            jc.setDeliveredAt(event.getEventTimestamp());
-                            jobRepository.incrementEmailSentCount(event.getJobId());   // "sent" = confirmed received
-                            jobRepository.incrementEmailDeliveredCount(event.getJobId());
-                            emailEventRepository.save(EmailEvent.builder()
-                                    .sesMessageId(jc.getSesMessageId())
-                                    .partyCode(event.getPartyCode())
-                                    .jobId(event.getJobId())
-                                    .recipientEmail(jc.getEmail())
-                                    .eventType(EmailEvent.EventType.DELIVERY)
-                                    .eventTimestamp(event.getEventTimestamp() != null
-                                            ? event.getEventTimestamp() : LocalDateTime.now())
-                                    .build());
+                            // Idempotency: only process if not already DELIVERED (SNS may retry)
+                            if (jc.getEmailStatus() != JobCustomer.EmailStatus.DELIVERED) {
+                                jc.setEmailStatus(JobCustomer.EmailStatus.DELIVERED);
+                                jc.setDeliveredAt(event.getEventTimestamp());
+                                jobRepository.incrementEmailDeliveredCount(event.getJobId());
+                                emailEventRepository.save(EmailEvent.builder()
+                                        .sesMessageId(jc.getSesMessageId())
+                                        .partyCode(event.getPartyCode())
+                                        .jobId(event.getJobId())
+                                        .recipientEmail(jc.getEmail())
+                                        .eventType(EmailEvent.EventType.DELIVERY)
+                                        .eventTimestamp(event.getEventTimestamp() != null
+                                                ? event.getEventTimestamp() : LocalDateTime.now())
+                                        .build());
+                            } else {
+                                log.debug("Duplicate DELIVERY event ignored | partyCode={}", jc.getPartyCode());
+                            }
                         }
                         case BOUNCE -> {
-                            jc.setEmailStatus(JobCustomer.EmailStatus.BOUNCED);
-                            jc.setBouncedAt(event.getEventTimestamp());
-                            Object bt = event.getPayload() != null ? event.getPayload().get("bounceType") : null;
-                            Object br = event.getPayload() != null ? event.getPayload().get("bounceSubType") : null;
-                            if (bt != null) jc.setBounceType(bt.toString());
-                            if (br != null) jc.setBounceReason(br.toString());
-                            jobRepository.incrementEmailBouncedCount(event.getJobId());
-                            emailEventRepository.save(EmailEvent.builder()
-                                    .sesMessageId(jc.getSesMessageId())
-                                    .partyCode(event.getPartyCode())
-                                    .jobId(event.getJobId())
-                                    .recipientEmail(jc.getEmail())
-                                    .eventType(EmailEvent.EventType.BOUNCE)
-                                    .bounceType(bt != null ? bt.toString() : null)
-                                    .bounceSubType(br != null ? br.toString() : null)
-                                    .eventTimestamp(event.getEventTimestamp() != null
-                                            ? event.getEventTimestamp() : LocalDateTime.now())
-                                    .build());
+                            // Idempotency: skip if already BOUNCED; never regress from DELIVERED
+                            if (jc.getEmailStatus() != JobCustomer.EmailStatus.BOUNCED
+                                    && jc.getEmailStatus() != JobCustomer.EmailStatus.DELIVERED) {
+                                jc.setEmailStatus(JobCustomer.EmailStatus.BOUNCED);
+                                jc.setBouncedAt(event.getEventTimestamp());
+                                Object bt = event.getPayload() != null ? event.getPayload().get("bounceType") : null;
+                                Object br = event.getPayload() != null ? event.getPayload().get("bounceSubType") : null;
+                                if (bt != null) jc.setBounceType(bt.toString());
+                                if (br != null) jc.setBounceReason(br.toString());
+                                jobRepository.incrementEmailBouncedCount(event.getJobId());
+                                emailEventRepository.save(EmailEvent.builder()
+                                        .sesMessageId(jc.getSesMessageId())
+                                        .partyCode(event.getPartyCode())
+                                        .jobId(event.getJobId())
+                                        .recipientEmail(jc.getEmail())
+                                        .eventType(EmailEvent.EventType.BOUNCE)
+                                        .bounceType(bt != null ? bt.toString() : null)
+                                        .bounceSubType(br != null ? br.toString() : null)
+                                        .eventTimestamp(event.getEventTimestamp() != null
+                                                ? event.getEventTimestamp() : LocalDateTime.now())
+                                        .build());
+                            } else {
+                                log.debug("BOUNCE event skipped — current status={} | partyCode={}", jc.getEmailStatus(), jc.getPartyCode());
+                            }
                         }
                         case COMPLAINT -> {
-                            jc.setEmailStatus(JobCustomer.EmailStatus.BOUNCED);
-                            jc.setBouncedAt(event.getEventTimestamp());
-                            jobRepository.incrementEmailBouncedCount(event.getJobId());
-                            emailEventRepository.save(EmailEvent.builder()
-                                    .sesMessageId(jc.getSesMessageId())
-                                    .partyCode(event.getPartyCode())
-                                    .jobId(event.getJobId())
-                                    .recipientEmail(jc.getEmail())
-                                    .eventType(EmailEvent.EventType.COMPLAINT)
-                                    .eventTimestamp(event.getEventTimestamp() != null
-                                            ? event.getEventTimestamp() : LocalDateTime.now())
-                                    .build());
+                            // Same guard: never regress from DELIVERED; skip duplicate BOUNCED
+                            if (jc.getEmailStatus() != JobCustomer.EmailStatus.BOUNCED
+                                    && jc.getEmailStatus() != JobCustomer.EmailStatus.DELIVERED) {
+                                jc.setEmailStatus(JobCustomer.EmailStatus.BOUNCED);
+                                jc.setBouncedAt(event.getEventTimestamp());
+                                jobRepository.incrementEmailBouncedCount(event.getJobId());
+                                emailEventRepository.save(EmailEvent.builder()
+                                        .sesMessageId(jc.getSesMessageId())
+                                        .partyCode(event.getPartyCode())
+                                        .jobId(event.getJobId())
+                                        .recipientEmail(jc.getEmail())
+                                        .eventType(EmailEvent.EventType.COMPLAINT)
+                                        .eventTimestamp(event.getEventTimestamp() != null
+                                                ? event.getEventTimestamp() : LocalDateTime.now())
+                                        .build());
+                            } else {
+                                log.debug("COMPLAINT event skipped — current status={} | partyCode={}", jc.getEmailStatus(), jc.getPartyCode());
+                            }
                         }
                         default -> {}
                     }
@@ -220,11 +236,12 @@ public class PipelineService {
             // Final completion: query actual DB counts for all terminal states
             long registered   = jobCustomerRepository.countByJob_JobId(jobId);
             long unregistered = Math.max(0, total - registered); // customers Lambda never registered (invalid in raw file)
+            long sent         = jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.SENT);
             long delivered    = jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.DELIVERED);
             long bounced      = jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.BOUNCED);
             long emailFailed  = jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.FAILED);
             long pdfFailed    = jobCustomerRepository.countByJob_JobIdAndPdfStatus(jobId, JobCustomer.PdfStatus.FAILED);
-            long done         = delivered + bounced + emailFailed + pdfFailed + unregistered;
+            long done         = sent + delivered + bounced + emailFailed + pdfFailed + unregistered;
 
             // PROCESSING → EMAILING: all PDFs accounted for (generated + pdfFailed + unregistered = total)
             if (job.getStatus() == Job.JobStatus.PROCESSING) {

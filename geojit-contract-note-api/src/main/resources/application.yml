@@ -79,13 +79,15 @@ app:
       pdf-bucket: pdf-s3-geojit-prod
       report-bucket: geojit-report-files-s3-prod
       error-bucket: geojit-error-bucket-prod
-      template-bucket: geojit-email-templates
+      template-bucket: geojit-email-templates-dev
     sqs:
       pipeline-status-queue: geojit-pipeline-status-queue.fifo
       map-split-queue: geojit-map-split-processing-queue.fifo
     lambda:
       split-lambda: split-lambda-geojit
     presigned-url-expiry-hours: 168   # 7 days
+    sns:
+      ses-topic-arn: ${SNS_SES_TOPIC_ARN:arn:aws:sns:ap-south-1:021859069003:geojit-ses-notifications}
 
   cors:
     allowed-origins: http://localhost:3000,http://localhost:3001

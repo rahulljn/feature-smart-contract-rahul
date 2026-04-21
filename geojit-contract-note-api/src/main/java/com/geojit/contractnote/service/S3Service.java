@@ -182,8 +182,8 @@ public class S3Service {
         try {
             return amazonS3.doesObjectExist(bucket, key);
         } catch (Exception e) {
-            log.warn("⚠️  S3 template existence check skipped (local-mock mode) | reason={}", e.getMessage());
-            return true; // assume exists — skip seed in local mode
+            log.warn("⚠️  S3 template existence check failed | reason={}", e.getMessage());
+            return false; // treat as missing — let the seed attempt run
         }
     }
 

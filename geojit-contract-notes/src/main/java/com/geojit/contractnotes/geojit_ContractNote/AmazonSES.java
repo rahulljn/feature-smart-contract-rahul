@@ -32,7 +32,8 @@ import java.util.TimeZone;
 
 public class AmazonSES {
 
-    static final String FROM     = "noreply@geojit.co.in";
+//    static final String FROM     = "noreply@geojit.co.in";
+    static final String FROM     = "jidnyasapatil333@gmail.com";
     static final String FROMNAME = "GEOJIT";
     static String CONFIGSET      = "geojit-config-set";
 
@@ -179,15 +180,15 @@ public class AmazonSES {
 
             SendRawEmailRequest rawEmailRequest = new SendRawEmailRequest(rawMessage)
                     .withConfigurationSetName(CONFIGSET);
-            sesClient.sendRawEmail(rawEmailRequest);
+            com.amazonaws.services.simpleemail.model.SendRawEmailResult sendResult =
+                    sesClient.sendRawEmail(rawEmailRequest);
+            String sesMessageId = sendResult.getMessageId();
 
-            // FIX: was logger.error("Email sent!") — wrong level, no context
-            // This is the ONLY line to search in CSV for exact successful email count
-            logger.info("Email sent for customer | partyCode={} | email={}",
-                    metadataJson.optString("partycode"), emailId);
+            logger.info("Email sent for customer | partyCode={} | email={} | sesMessageId={}",
+                    metadataJson.optString("partycode"), emailId, sesMessageId);
 
             sesClient.shutdown();
-            return "successful";
+            return sesMessageId;
 
         } catch (Exception ex) {
             String partyCode = metadataJson.optString("partycode");

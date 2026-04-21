@@ -145,13 +145,13 @@ export default function DashboardPage() {
             sub="Unique clientCodes in pipeline"
           />
           <MetricCard
-            title="Emails delivered"
-            value={metrics?.totalDelivered ?? 0}
+            title="Emails sent"
+            value={metrics?.totalEmailsSent ?? 0}
             icon="task_alt"
             iconBg="bg-emerald-50"
             iconColor="text-emerald-600"
             badge={{ label: `${metrics?.deliveryRate ?? 0}%`, ok: true }}
-            sub="Confirmed received by client"
+            sub={(metrics?.totalConfirmed ?? 0) > 0 ? `${metrics?.totalConfirmed} confirmed by mail server` : "Dispatched to SES"}
           />
           <MetricCard
             title="Records failed"
@@ -194,11 +194,11 @@ export default function DashboardPage() {
           </div>
 
           {metrics ? (() => {
-            const total    = metrics.totalCustomersInPipeline;
-            const pdfs     = metrics.totalPdfsGenerated;
-            const sent     = metrics.totalEmailsSent;
-            const delivered = metrics.totalDelivered;
-            const bounced  = metrics.totalBounced;
+            const total     = metrics.totalCustomersInPipeline;
+            const pdfs      = metrics.totalPdfsGenerated;
+            const sent      = metrics.totalEmailsSent;
+            const confirmed = metrics.totalConfirmed ?? 0;
+            const bounced   = metrics.totalBounced;
             const failed   = metrics.failedJobs;
             return (
               <div className="space-y-1">
@@ -219,9 +219,9 @@ export default function DashboardPage() {
                 {/* Delivery outcomes — indent */}
                 <div className="ml-6 border-l-2 border-slate-200 pl-4 pt-1 pb-1 space-y-1">
 
-                  <FunnelRow icon="mark_email_read" label="Confirmed received" value={delivered} total={total}
+                  <FunnelRow icon="mark_email_read" label="Confirmed received" value={confirmed} total={total}
                     color="bg-emerald-500"
-                    note={`Delivery confirmed by mail server · ${sent > 0 ? ((delivered/sent)*100).toFixed(1) : 0}% of sent`} />
+                    note={confirmed > 0 ? `Delivery confirmed by mail server · ${sent > 0 ? ((confirmed/sent)*100).toFixed(1) : 0}% of sent` : "Delivery receipts via SNS — 0 received yet"} />
 
                   <div className="flex items-center gap-2 py-1.5 px-3 bg-amber-50 border border-amber-100 rounded-xl">
                     <span className="material-symbols-outlined text-amber-500 text-[16px]">unsubscribe</span>
