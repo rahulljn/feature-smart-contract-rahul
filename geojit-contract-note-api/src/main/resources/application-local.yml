@@ -1,0 +1,47 @@
+# ─── LOCAL PROFILE ───────────────────────────────────────────────────
+# Uses: real AWS (configured via ~/.aws/credentials or env vars)
+#       local PostgreSQL (Homebrew / native install)
+#       no LocalStack needed
+
+# ─── AWS Dev Overrides ────────────────────────────────────────────────
+app:
+  aws:
+    region: ap-south-1
+    s3:
+      raw-bucket: raw-s3-geojit-dev
+      chunks-bucket: chunks-s3-geojit-dev
+      pdf-bucket: pdf-s3-geojit-dev
+      report-bucket: geojit-report-files-s3-dev
+      error-bucket: geojit-error-bucket-dev
+    sqs:
+      pipeline-status-queue: geojit-pipeline-status-queue.fifo
+      map-split-queue: geojit-map-split-processing-queue.fifo
+    lambda:
+      split-lambda: split-file-lambda-geojit
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/geojit_contract_note
+    username: brijesh
+    password:
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: GeojitHikariPool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      connection-timeout: 30000
+      max-lifetime: 1800000
+
+  jpa:
+    show-sql: true      # useful in local dev
+
+logging:
+  level:
+    com.geojit: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+    software.amazon.awssdk: WARN
+    com.amazonaws: WARN
+  pattern:
+    console: "%clr(%d{HH:mm:ss.SSS}){faint} %clr(%-5level) %clr([%thread]){faint} %clr(%logger{36}){cyan} - %msg%n"

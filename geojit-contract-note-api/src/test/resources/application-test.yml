@@ -1,0 +1,61 @@
+# ─────────────────────────────────────────────────────────────────────
+# TEST PROFILE — uses H2 in-memory DB, no AWS connections
+# ─────────────────────────────────────────────────────────────────────
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;NON_KEYWORDS=VALUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop    # H2 managed by Hibernate in tests (Flyway disabled)
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  flyway:
+    enabled: false             # Disable Flyway — H2 uses Hibernate DDL
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+server:
+  port: 0                      # Random port for test server
+
+app:
+  jwt:
+    private-key-path: classpath:keys/private.pem
+    public-key-path:  classpath:keys/public.pem
+    expiration-ms:    3600000  # 1 hour
+    refresh-expiration-ms: 7200000
+    issuer: geojit-test
+
+  aws:
+    region: ap-south-1
+    s3:
+      raw-bucket:    test-raw-bucket
+      chunks-bucket: test-chunks-bucket
+      pdf-bucket:    test-pdf-bucket
+      report-bucket: test-report-bucket
+      error-bucket:  test-error-bucket
+    sqs:
+      pipeline-status-queue: test-pipeline-status-queue.fifo
+      map-split-queue:       test-map-split-queue.fifo
+    lambda:
+      split-lambda: test-split-lambda
+    presigned-url-expiry-hours: 1
+
+  cors:
+    allowed-origins: http://localhost:3000
+
+logging:
+  level:
+    root: WARN
+    com.geojit: DEBUG

@@ -1,0 +1,103 @@
+# ─────────────────────────────────────────────────────────────────────
+# PRODUCTION PROFILE  (spring.profiles.active=prod)
+# Override only what differs from application.yml
+# ─────────────────────────────────────────────────────────────────────
+
+spring:
+  datasource:
+    url: ${DB_URL}                          # jdbc:postgresql://rds-host:5432/geojit_contract_note
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: geojit-prod-pool
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+      leak-detection-threshold: 60000
+
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        generate_statistics: false
+
+  flyway:
+    enabled: true
+    validate-on-migrate: true
+
+# ─── Server ──────────────────────────────────────────────────────────
+server:
+  port: ${PORT:8080}
+  compression:
+    enabled: true
+    min-response-size: 1024
+  error:
+    include-message: on-param
+    include-binding-errors: on-param
+    include-stacktrace: never
+    include-exception: false
+
+# ─── Actuator ────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /internal/actuator     # Not exposed via public ALB rule
+  endpoint:
+    health:
+      show-details: never               # Never leak stack traces in prod health
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# ─── Springdoc ────────────────────────────────────────────────────────
+springdoc:
+  swagger-ui:
+    enabled: false                       # Disable Swagger UI in production
+  api-docs:
+    enabled: false
+
+# ─── Logging ─────────────────────────────────────────────────────────
+logging:
+  level:
+    root: WARN
+    com.geojit: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+  pattern:
+    # Logback-spring.xml handles JSON format in prod; this is a fallback
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# ─── App: JWT ────────────────────────────────────────────────────────
+app:
+  jwt:
+    # In production, keys should come from AWS Secrets Manager / Parameter Store.
+    # Mount them as files via ECS task definition volume, or override these paths
+    # with environment variables: APP_JWT_PRIVATE_KEY_PATH, APP_JWT_PUBLIC_KEY_PATH
+    private-key-path: ${JWT_PRIVATE_KEY_PATH:classpath:keys/private.pem}
+    public-key-path:  ${JWT_PUBLIC_KEY_PATH:classpath:keys/public.pem}
+    expiration-ms:    ${JWT_EXPIRY_MS:28800000}    # 8 hours in prod (shorter than dev)
+    issuer: geojit-contract-note-api
+
+  aws:
+    region: ${AWS_REGION:ap-south-1}
+    s3:
+      raw-bucket:    ${S3_RAW_BUCKET:raw-s3-geojit-prod}
+      chunks-bucket: ${S3_CHUNKS_BUCKET:chunks-s3-geojit-prod}
+      pdf-bucket:    ${S3_PDF_BUCKET:pdf-s3-geojit-prod}
+      report-bucket: ${S3_REPORT_BUCKET:geojit-report-files-s3-prod}
+      error-bucket:  ${S3_ERROR_BUCKET:geojit-error-bucket-prod}
+    sqs:
+      pipeline-status-queue: ${SQS_PIPELINE_STATUS:geojit-pipeline-status-queue.fifo}
+      map-split-queue:       ${SQS_MAP_SPLIT:geojit-map-split-processing-queue.fifo}
+    lambda:
+      split-lambda: ${LAMBDA_SPLIT:split-lambda-geojit}
+    presigned-url-expiry-hours: 24     # 24 h in prod (tighter than 7-day dev)
+
+  cors:
+    allowed-origins: ${CORS_ORIGINS:https://contractnote.geojit.com}

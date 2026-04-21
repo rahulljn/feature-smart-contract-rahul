@@ -1,0 +1,51 @@
+# ─── Build output ─────────────────────────────────────────────────────
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+
+# ─── IDE / OS ─────────────────────────────────────────────────────────
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Maven wrapper ────────────────────────────────────────────────────
+!.mvn/wrapper/maven-wrapper.jar
+
+# ─── Secrets & Keys  ─────────────────────────────────────────────────
+# NEVER commit RSA private keys or env files
+src/main/resources/keys/private.pem
+src/main/resources/keys/
+.env
+.env.*
+*.pem
+*.p12
+*.jks
+*.pfx
+
+# ─── Logs ─────────────────────────────────────────────────────────────
+logs/
+*.log
+*.log.*
+
+# ─── Spring Boot DevTools ────────────────────────────────────────────
+spring-devtools.properties
+
+# ─── Test coverage ────────────────────────────────────────────────────
+jacoco.exec
+jacoco/
+
+# ─── Docker ───────────────────────────────────────────────────────────
+# Keep docker-compose.yml but ignore local overrides with secrets
+docker-compose.override.yml
+docker-compose.prod.yml

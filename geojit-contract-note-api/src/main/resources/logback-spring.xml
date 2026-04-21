@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- ─── APPENDERS ────────────────────────────────────────────────── -->
+
+    <!-- LOCAL / DEV: human-readable coloured console -->
+    <springProfile name="local,test">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) %cyan(%logger{30}) [%thread] - %msg%n</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <!-- PROD: structured JSON — every log line is a valid JSON object.
+         ECS / CloudWatch Log Insights can parse this natively. -->
+    <springProfile name="prod">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <!-- Include MDC fields (traceId, userId, jobId, etc.) as top-level JSON keys -->
+                <includeMdcKeyName>traceId</includeMdcKeyName>
+                <includeMdcKeyName>userId</includeMdcKeyName>
+                <includeMdcKeyName>jobId</includeMdcKeyName>
+                <includeMdcKeyName>requestId</includeMdcKeyName>
+                <customFields>{"app":"geojit-contract-note-api","env":"prod"}</customFields>
+                <fieldNames>
+                    <timestamp>@timestamp</timestamp>
+                    <message>message</message>
+                    <logger>logger</logger>
+                    <thread>thread</thread>
+                    <level>level</level>
+                    <levelValue>[ignore]</levelValue>
+                </fieldNames>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <!-- Rolling file appender (used in prod alongside CONSOLE / ECS daemon) -->
+    <springProfile name="prod">
+        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/app.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                <fileNamePattern>logs/app.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                <timeBasedFileNamingAndTriggeringPolicy
+                        class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                    <maxFileSize>100MB</maxFileSize>
+                </timeBasedFileNamingAndTriggeringPolicy>
+                <maxHistory>14</maxHistory>
+                <totalSizeCap>2GB</totalSizeCap>
+            </rollingPolicy>
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <customFields>{"app":"geojit-contract-note-api","env":"prod"}</customFields>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <!-- ─── LOGGERS ──────────────────────────────────────────────────── -->
+
+    <!-- Application code: INFO in prod, DEBUG in local -->
+    <springProfile name="local,test">
+        <logger name="com.geojit" level="DEBUG"/>
+        <logger name="org.springframework.security" level="DEBUG"/>
+        <logger name="org.hibernate.SQL" level="DEBUG"/>
+        <logger name="org.hibernate.type.descriptor.sql" level="TRACE"/>
+        <logger name="com.zaxxer.hikari" level="INFO"/>
+    </springProfile>
+
+    <springProfile name="prod">
+        <logger name="com.geojit" level="INFO"/>
+        <logger name="org.springframework.security" level="WARN"/>
+        <logger name="org.hibernate.SQL" level="WARN"/>
+        <logger name="com.zaxxer.hikari" level="INFO"/>
+        <logger name="org.flywaydb" level="INFO"/>
+    </springProfile>
+
+    <!-- ─── ROOT ─────────────────────────────────────────────────────── -->
+    <springProfile name="local,test">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="prod">
+        <root level="WARN">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
+
+</configuration>

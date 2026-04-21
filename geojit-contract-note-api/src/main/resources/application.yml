@@ -1,0 +1,90 @@
+spring:
+  application:
+    name: geojit-contract-note-api
+
+  profiles:
+    active: ${SPRING_PROFILE:local}
+
+  # ─── JPA ────────────────────────────────────────────────────────
+  jpa:
+    hibernate:
+      ddl-auto: validate          # Flyway owns the schema, Hibernate only validates
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+  # ─── Flyway ──────────────────────────────────────────────────────
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+  # ─── File Upload ─────────────────────────────────────────────────
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10GB
+      max-request-size: 10GB
+
+# ─── Server ──────────────────────────────────────────────────────────
+server:
+  port: 8080
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+    mime-types: application/json,text/html,text/plain
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# ─── Actuator ────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# ─── Springdoc / Swagger ─────────────────────────────────────────────
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+# ─── Application Custom Properties ───────────────────────────────────
+app:
+  jwt:
+    private-key-path: classpath:keys/private.pem
+    public-key-path: classpath:keys/public.pem
+    expiration-ms: 86400000        # 24 hours
+    refresh-expiration-ms: 604800000  # 7 days
+    issuer: geojit-contract-note-api
+
+  aws:
+    region: ap-south-1
+    s3:
+      raw-bucket: raw-s3-geojit-prod
+      chunks-bucket: chunks-s3-geojit-prod
+      pdf-bucket: pdf-s3-geojit-prod
+      report-bucket: geojit-report-files-s3-prod
+      error-bucket: geojit-error-bucket-prod
+    sqs:
+      pipeline-status-queue: geojit-pipeline-status-queue.fifo
+      map-split-queue: geojit-map-split-processing-queue.fifo
+    lambda:
+      split-lambda: split-lambda-geojit
+    presigned-url-expiry-hours: 168   # 7 days
+
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:3001

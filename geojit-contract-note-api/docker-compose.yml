@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: geojit_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: geojit_contract_note
+      POSTGRES_USER: geojit
+      POSTGRES_PASSWORD: geojit@local123
+    ports:
+      - "5432:5432"
+    volumes:
+      - geojit_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geojit -d geojit_contract_note"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  geojit_pgdata:
+    driver: local
