@@ -110,8 +110,6 @@ export const templatesApi = {
   updateFields: (id: string, data: object) => api.put(`/templates/${id}/fields`, data),
   activate: (id: string) => api.post(`/templates/${id}/activate`),
   validate: (id: string) => api.post(`/templates/${id}/validate`),
-  resend: (id: string, partyCode: string, jobId?: string, overrideEmail?: string) =>
-    api.post(`/templates/${id}/resend`, { partyCode, jobId: jobId || undefined, overrideEmail: overrideEmail || undefined }),
 };
 
 export const configApi = {

@@ -2,17 +2,12 @@ package com.geojit.contractnote.controller;
 
 import com.geojit.contractnote.dto.request.TemplateFieldsRequest;
 import com.geojit.contractnote.dto.request.TemplateRequest;
-import com.geojit.contractnote.dto.request.TemplateResendRequest;
 import com.geojit.contractnote.dto.response.ApiResponse;
 import com.geojit.contractnote.entity.*;
-import com.geojit.contractnote.exception.ResourceNotFoundException;
-import com.geojit.contractnote.repository.JobCustomerRepository;
 import com.geojit.contractnote.repository.UserRepository;
 import com.geojit.contractnote.service.EmailTemplateService;
-import com.geojit.contractnote.service.ResendService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
@@ -31,8 +26,6 @@ public class TemplateController {
 
     private final EmailTemplateService    emailTemplateService;
     private final UserRepository          userRepository;
-    private final JobCustomerRepository   jobCustomerRepository;
-    private final ResendService           resendService;
 
     @GetMapping
     @Operation(summary = "List all email templates")
@@ -99,33 +92,4 @@ public class TemplateController {
         return ResponseEntity.ok(ApiResponse.ok(emailTemplateService.validate(id)));
     }
 
-    @PostMapping("/{id}/resend")
-    @PreAuthorize("hasAnyRole('ADMIN','OPS_MANAGER')")
-    @Operation(summary = "Resend a contract note to a specific partyCode using this template")
-    public ResponseEntity<ApiResponse<String>> resend(
-            @PathVariable UUID id,
-            @Valid @RequestBody TemplateResendRequest req,
-            @AuthenticationPrincipal UserDetails userDetails,
-            HttpServletRequest httpRequest) {
-
-        User user = userRepository.findByEmail(userDetails.getUsername()).orElseThrow();
-        String partyCode = req.getPartyCode().trim();
-
-        // Resolve jobId: use provided one, or find the most recent job for this partyCode
-        UUID jobId = req.getJobId();
-        if (jobId == null) {
-            List<JobCustomer> history = jobCustomerRepository.findByPartyCodeOrderByCreatedAtDesc(partyCode);
-            if (history.isEmpty()) {
-                throw new ResourceNotFoundException(
-                        "No job history found for partyCode: " + partyCode);
-            }
-            jobId = history.get(0).getJob().getJobId();
-        }
-
-        resendService.resendForCustomer(
-                jobId, partyCode, req.getOverrideEmail(), id, user, httpRequest);
-
-        return ResponseEntity.ok(ApiResponse.ok(
-                "Resend triggered for partyCode=" + partyCode + " using template=" + id));
-    }
 }

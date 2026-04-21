@@ -10,8 +10,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Slf4j
@@ -145,6 +148,42 @@ public class S3Service {
         } catch (Exception e) {
             log.warn("⚠️  S3 uploadBytes skipped (local-mock mode) | key={} | reason={}", key, e.getMessage());
             return "mock-" + key;
+        }
+    }
+
+    /**
+     * Upload the active email template HTML to the template bucket.
+     * Key is always "active/contract-note.html" — overwritten on every template save.
+     * The Email Lambda reads from this key with an in-memory cache (TTL 15 min).
+     */
+    public void putTemplateHtml(String htmlBody) {
+        String bucket = appProperties.getAws().getS3().getTemplateBucket();
+        String key    = "active/contract-note.html";
+        try {
+            byte[] bytes = htmlBody.getBytes(StandardCharsets.UTF_8);
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentLength(bytes.length);
+            metadata.setContentType("text/html; charset=utf-8");
+            InputStream stream = new ByteArrayInputStream(bytes);
+            amazonS3.putObject(new PutObjectRequest(bucket, key, stream, metadata));
+            log.info("Template HTML uploaded to S3 | bucket={} | key={}", bucket, key);
+        } catch (Exception e) {
+            log.warn("⚠️  S3 template upload skipped (local-mock mode) | reason={}", e.getMessage());
+        }
+    }
+
+    /**
+     * Check whether the active template HTML file already exists in S3.
+     * Used at startup to seed the bucket if empty.
+     */
+    public boolean templateHtmlExists() {
+        String bucket = appProperties.getAws().getS3().getTemplateBucket();
+        String key    = "active/contract-note.html";
+        try {
+            return amazonS3.doesObjectExist(bucket, key);
+        } catch (Exception e) {
+            log.warn("⚠️  S3 template existence check skipped (local-mock mode) | reason={}", e.getMessage());
+            return true; // assume exists — skip seed in local mode
         }
     }
 

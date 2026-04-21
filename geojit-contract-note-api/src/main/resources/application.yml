@@ -79,6 +79,7 @@ app:
       pdf-bucket: pdf-s3-geojit-prod
       report-bucket: geojit-report-files-s3-prod
       error-bucket: geojit-error-bucket-prod
+      template-bucket: geojit-email-templates
     sqs:
       pipeline-status-queue: geojit-pipeline-status-queue.fifo
       map-split-queue: geojit-map-split-processing-queue.fifo

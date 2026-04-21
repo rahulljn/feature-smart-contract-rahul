@@ -6,6 +6,9 @@ import com.geojit.contractnote.entity.*;
 import com.geojit.contractnote.exception.*;
 import com.geojit.contractnote.repository.EmailTemplateRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,11 +18,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EmailTemplateService {
 
     private final EmailTemplateRepository emailTemplateRepository;
+    private final S3Service               s3Service;
 
     @Transactional(readOnly = true)
     public List<EmailTemplate> getAll() {
@@ -79,11 +84,17 @@ public class EmailTemplateService {
         if (req.getFooterColor() != null && !req.getFooterColor().isBlank()) t.setFooterColor(req.getFooterColor());
 
         // Rebuild the full HTML from the fixed skeleton + updated editable fields
-        t.setHtmlBody(buildHtml(t));
+        String html = buildHtml(t);
+        t.setHtmlBody(html);
         t.setLastEditedBy(editedBy);
         t.setLastEditedAt(LocalDateTime.now());
 
-        return emailTemplateRepository.save(t);
+        EmailTemplate saved = emailTemplateRepository.save(t);
+
+        // Sync the rebuilt HTML to S3 so the Email Lambda picks it up on next cache refresh
+        s3Service.putTemplateHtml(html);
+
+        return saved;
     }
 
     /**
@@ -207,5 +218,28 @@ public class EmailTemplateService {
 
     private String nonBlankOr(String value, String fallback) {
         return (value != null && !value.isBlank()) ? value : fallback;
+    }
+
+    // ── S3 seed on startup ───────────────────────────────────────────────
+
+    /**
+     * On application startup: if the template HTML file does not yet exist in S3,
+     * seed it from the active DB template so the Email Lambda always has something to fetch.
+     */
+    @Bean
+    public ApplicationRunner seedTemplateS3() {
+        return args -> {
+            try {
+                if (!s3Service.templateHtmlExists()) {
+                    EmailTemplate active = emailTemplateRepository.findByIsActiveTrue().orElse(null);
+                    if (active != null) {
+                        s3Service.putTemplateHtml(active.getHtmlBody());
+                        log.info("Seeded email template HTML to S3 from DB template '{}'", active.getName());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Template S3 seed skipped: {}", e.getMessage());
+            }
+        };
     }
 }

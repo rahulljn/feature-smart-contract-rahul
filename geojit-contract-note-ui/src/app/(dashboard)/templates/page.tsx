@@ -142,11 +142,6 @@ export default function TemplatesPage() {
   const [bodyColor,    setBodyColor]    = useState("#333333");
   const [footerColor,  setFooterColor]  = useState("#666666");
 
-  // Resend form state
-  const [resendPartyCode,    setResendPartyCode]    = useState("");
-  const [resendJobId,        setResendJobId]        = useState("");
-  const [resendOverrideEmail,setResendOverrideEmail]= useState("");
-
   const { data, isLoading } = useQuery({
     queryKey: ["templates"],
     queryFn: () => templatesApi.list(),
@@ -205,29 +200,6 @@ export default function TemplatesPage() {
       }
     },
     onError: () => toast.error("Validation request failed"),
-  });
-
-  const { mutate: triggerResend, isPending: resending } = useMutation({
-    mutationFn: () => {
-      if (!template) throw new Error("No template loaded");
-      if (!resendPartyCode.trim()) throw new Error("Party code is required");
-      return templatesApi.resend(
-        template.templateId,
-        resendPartyCode.trim(),
-        resendJobId.trim() || undefined,
-        resendOverrideEmail.trim() || undefined,
-      );
-    },
-    onSuccess: () => {
-      toast.success(`Resend triggered for ${resendPartyCode.trim()}`);
-      setResendPartyCode("");
-      setResendJobId("");
-      setResendOverrideEmail("");
-    },
-    onError: (e: unknown) => {
-      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Resend failed";
-      toast.error(msg);
-    },
   });
 
   const TABS: { id: TabId; label: string; icon: string }[] = [
@@ -564,70 +536,6 @@ export default function TemplatesPage() {
         )}
       </div>
 
-      {/* Resend panel */}
-      {isEditor && (
-        <div className="card p-0 overflow-hidden">
-          <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
-            <span className="material-symbols-outlined text-[#00174b] text-base">forward_to_inbox</span>
-            <span className="font-bold text-slate-800 text-sm">Resend with this template</span>
-            <span className="text-slate-500 text-xs ml-1">— Send to a specific client using the current saved template</span>
-          </div>
-          <div className="p-5 space-y-4">
-            <div className="grid md:grid-cols-3 gap-4">
-              <div>
-                <label className="field-label">
-                  Party Code <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={resendPartyCode}
-                  onChange={e => setResendPartyCode(e.target.value)}
-                  placeholder="e.g. ZYR175"
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#497cff]/20"
-                />
-              </div>
-              <div>
-                <label className="field-label">
-                  Job ID <span className="text-slate-400 font-normal">(optional — uses latest job if blank)</span>
-                </label>
-                <input
-                  type="text"
-                  value={resendJobId}
-                  onChange={e => setResendJobId(e.target.value)}
-                  placeholder="UUID of the job"
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm mono focus:outline-none focus:ring-2 focus:ring-[#497cff]/20"
-                />
-              </div>
-              <div>
-                <label className="field-label">
-                  Override Email <span className="text-slate-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  type="email"
-                  value={resendOverrideEmail}
-                  onChange={e => setResendOverrideEmail(e.target.value)}
-                  placeholder="Use customer's registered email if blank"
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#497cff]/20"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => triggerResend()}
-                disabled={resending || !resendPartyCode.trim()}
-                className="px-5 py-2.5 bg-[#00174b] text-white rounded-xl text-sm font-bold hover:bg-[#003ea8] flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {resending ? <Loader2 className="animate-spin h-4 w-4" /> : <span className="material-symbols-outlined text-sm">send</span>}
-                Send with this template
-              </button>
-              <p className="text-[11px] text-slate-500">
-                This will resend the contract note PDF from the job&apos;s existing S3 archive (or re-trigger the full pipeline if no PDF exists) using the <strong>last saved</strong> version of this template.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

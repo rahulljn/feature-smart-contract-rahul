@@ -27,6 +27,7 @@ public class AppProperties {
             private String pdfBucket;
             private String reportBucket;
             private String errorBucket;
+            private String templateBucket;
         }
 
         @Data
