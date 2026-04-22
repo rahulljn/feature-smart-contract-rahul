@@ -6,7 +6,7 @@ import { jobsApi, pipelineApi } from "@/lib/api";
 import type { Job, PipelineEvent, ValidationResult } from "@/types";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, toUtcDate } from "@/lib/utils";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 
@@ -261,7 +261,7 @@ export default function ProcessPage() {
                     <span className="material-symbols-outlined text-slate-400 group-hover:text-[#00174b]">description</span>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold text-slate-700 truncate">{j.fileName}</div>
-                      <div className="text-[11px] text-slate-400">{j.totalRecords?.toLocaleString() ?? "—"} records · {formatDistanceToNow(new Date(j.uploadedAt), { addSuffix: true })}</div>
+                      <div className="text-[11px] text-slate-400">{j.totalRecords?.toLocaleString() ?? "—"} records · {formatDistanceToNow(toUtcDate(j.uploadedAt) ?? new Date(), { addSuffix: true })}</div>
                     </div>
                     <span className="seg-chip">{j.segmentType ?? "—"}</span>
                   </Link>

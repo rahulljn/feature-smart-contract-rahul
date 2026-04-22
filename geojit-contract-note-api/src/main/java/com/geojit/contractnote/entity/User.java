@@ -36,6 +36,10 @@ public class User {
     @Column(nullable = false, length = 50)
     private Role role;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Organisation organisation = Organisation.GEOJIT;
+
     @Column(name = "is_active", nullable = false)
     @Getter(onMethod_ = {@JsonProperty("isActive")})   // forces Jackson to serialize as "isActive" (not "active")
     private boolean isActive = true;
@@ -52,4 +56,6 @@ public class User {
     private LocalDateTime updatedAt;
 
     public enum Role { ADMIN, OPS_MANAGER, VIEWER }
+
+    public enum Organisation { ACC, GEOJIT }
 }

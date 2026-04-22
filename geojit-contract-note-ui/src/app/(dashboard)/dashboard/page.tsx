@@ -8,7 +8,7 @@ import { Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import { useAuthStore } from "@/store/auth";
-import { cn } from "@/lib/utils";
+import { cn, toUtcDate } from "@/lib/utils";
 
 const statusMeta: Record<string, { bg: string; text: string; dot: string }> = {
   COMPLETED:  { bg: "bg-[#ecfdf5]",  text: "text-[#047857]",  dot: "bg-[#10b981]" },
@@ -282,7 +282,7 @@ export default function DashboardPage() {
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-semibold text-slate-800">{item.description.replace(/([A-Z0-9]+)\/\1/g, "$1")}</div>
                   <div className="text-[11px] text-slate-500 mt-0.5">
-                    {EVENT_TYPE_LABEL[item.eventType] ?? item.eventType.replace(/_/g, " ")} · {formatDistanceToNow(new Date(item.eventTimestamp.endsWith("Z") ? item.eventTimestamp : item.eventTimestamp + "Z"), { addSuffix: true })}
+                    {EVENT_TYPE_LABEL[item.eventType] ?? item.eventType.replace(/_/g, " ")} · {formatDistanceToNow(toUtcDate(item.eventTimestamp) ?? new Date(), { addSuffix: true })}
                   </div>
                 </div>
                 {item.jobId && <span className="material-symbols-outlined text-slate-300 group-hover:text-[#497cff] text-sm">chevron_right</span>}

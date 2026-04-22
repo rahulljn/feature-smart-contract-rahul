@@ -25,6 +25,7 @@ import java.io.ByteArrayInputStream;
 import java.security.KeyStore;
 import java.security.MessageDigest;
 import java.security.cert.X509Certificate;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.HexFormat;
 import java.util.List;
@@ -101,9 +102,13 @@ public class ConfigController {
     // ─── SES Statistics ────────────────────────────────────────────
 
     @GetMapping("/ses/statistics")
-    @Operation(summary = "Get SES account statistics (reputation, quota, bounce rate)")
-    public ResponseEntity<ApiResponse<SesStatisticsResponse>> getSesStatistics() {
-        return ResponseEntity.ok(ApiResponse.ok(sesStatisticsService.getStatistics()));
+    @Operation(summary = "Get SES account statistics (reputation, quota, bounce rate, time-series)")
+    public ResponseEntity<ApiResponse<SesStatisticsResponse>> getSesStatistics(
+            @RequestParam(required = false) LocalDate startDate,
+            @RequestParam(required = false) LocalDate endDate) {
+        LocalDate start = startDate != null ? startDate : LocalDate.now();
+        LocalDate end   = endDate   != null ? endDate   : LocalDate.now();
+        return ResponseEntity.ok(ApiResponse.ok(sesStatisticsService.getStatistics(start, end)));
     }
 
     // ─── Certificates ──────────────────────────────────────────────

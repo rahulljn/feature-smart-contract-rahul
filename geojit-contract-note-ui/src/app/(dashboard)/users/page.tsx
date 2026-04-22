@@ -3,27 +3,35 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usersApi } from "@/lib/api";
-import type { AppUser } from "@/types";
+import { useAuthStore } from "@/store/auth";
+import type { AppUser, UserOrganisation } from "@/types";
 import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, fmtDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const avatarColors = ["bg-[#00174b]", "bg-emerald-600", "bg-purple-600", "bg-rose-600", "bg-amber-600", "bg-sky-600"];
 const rolePill: Record<string, string> = { ADMIN: "pill-info", OPS_MANAGER: "pill-ok", VIEWER: "pill-neu" };
+const orgPill: Record<string, string> = { ACC: "pill-info", GEOJIT: "pill-ok" };
 const permissions: Record<string, string> = {
   ADMIN: "Upload · Override · Bulk resend · Template · PFX · Users",
   OPS_MANAGER: "Upload · Override · Bulk resend · Template · PFX",
   VIEWER: "Read-only · Reports · Audit",
 };
 
+type FormState = { name: string; email: string; role: string; organisation: UserOrganisation; password: string };
+const defaultForm = (): FormState => ({ name: "", email: "", role: "OPS_MANAGER", organisation: "GEOJIT", password: "" });
+
 export default function UsersPage() {
   const qc = useQueryClient();
+  const authUser = useAuthStore(s => s.user);
+  const isAccAdmin = authUser?.organisation === "ACC" || !authUser?.organisation; // treat unknown as ACC (backwards compat)
+
   const [showInvite, setShowInvite] = useState(false);
   const [editUser, setEditUser] = useState<AppUser | null>(null);
   const [deactivateUser, setDeactivateUser] = useState<AppUser | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", role: "OPS_MANAGER", password: "" });
+  const [form, setForm] = useState<FormState>(defaultForm());
 
   const { data, isLoading } = useQuery({ queryKey: ["users"], queryFn: () => usersApi.list() });
   const _raw = data?.data?.data;
@@ -31,7 +39,7 @@ export default function UsersPage() {
 
   const { mutate: create, isPending: creating } = useMutation({
     mutationFn: () => usersApi.create(form),
-    onSuccess: () => { toast.success("User created successfully"); setShowInvite(false); setForm({ name: "", email: "", role: "OPS_MANAGER", password: "" }); qc.invalidateQueries({ queryKey: ["users"] }); },
+    onSuccess: () => { toast.success("User created successfully"); setShowInvite(false); setForm(defaultForm()); qc.invalidateQueries({ queryKey: ["users"] }); },
     onError: (e: unknown) => {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to create user";
       toast.error(msg);
@@ -39,7 +47,7 @@ export default function UsersPage() {
   });
 
   const { mutate: update, isPending: updating } = useMutation({
-    mutationFn: () => usersApi.update(editUser!.userId, { name: form.name, role: form.role }),
+    mutationFn: () => usersApi.update(editUser!.userId, { name: form.name, role: form.role, organisation: form.organisation }),
     onSuccess: () => { toast.success("User updated"); setEditUser(null); qc.invalidateQueries({ queryKey: ["users"] }); },
   });
 
@@ -48,7 +56,10 @@ export default function UsersPage() {
     onSuccess: () => { toast.success("User deactivated — access revoked immediately"); setDeactivateUser(null); qc.invalidateQueries({ queryKey: ["users"] }); },
   });
 
-  const openEdit = (u: AppUser) => { setForm({ name: u.name, email: u.email, role: u.role, password: "" }); setEditUser(u); };
+  const openEdit = (u: AppUser) => {
+    setForm({ name: u.name, email: u.email, role: u.role, organisation: u.organisation ?? "GEOJIT", password: "" });
+    setEditUser(u);
+  };
 
   return (
     <div className="p-6 space-y-5 max-w-[1600px] mx-auto w-full fade-up">
@@ -57,19 +68,28 @@ export default function UsersPage() {
           <h2 className="text-2xl font-extrabold text-slate-900 headline">Users &amp; Roles</h2>
           <p className="text-slate-500 text-sm mt-1">Manage operator access to the contract note pipeline. Admins control uploads, config, and certificate management.</p>
         </div>
-        <button onClick={() => { setForm({ name: "", email: "", role: "OPS_MANAGER", password: "" }); setShowInvite(true); }} className="px-4 py-2 bg-[#00174b] text-white rounded-xl text-sm font-bold hover:bg-[#003ea8] flex items-center gap-1.5">
+        <button onClick={() => { setForm(defaultForm()); setShowInvite(true); }} className="px-4 py-2 bg-[#00174b] text-white rounded-xl text-sm font-bold hover:bg-[#003ea8] flex items-center gap-1.5">
           <span className="material-symbols-outlined text-base">person_add</span>Add user
         </button>
       </div>
 
       <div className="card overflow-hidden">
         <table className="w-full text-left">
-          <thead><tr className="t-hd"><th className="px-5 py-3.5">User</th><th className="px-5 py-3.5">Role</th><th className="px-5 py-3.5">Permissions</th><th className="px-5 py-3.5">Last active</th><th className="px-5 py-3.5 text-right">Actions</th></tr></thead>
+          <thead>
+            <tr className="t-hd">
+              <th className="px-5 py-3.5">User</th>
+              <th className="px-5 py-3.5">Organisation</th>
+              <th className="px-5 py-3.5">Role</th>
+              <th className="px-5 py-3.5">Permissions</th>
+              <th className="px-5 py-3.5">Last active</th>
+              <th className="px-5 py-3.5 text-right">Actions</th>
+            </tr>
+          </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={5} className="text-center py-12"><Loader2 className="animate-spin text-[#00174b] inline" /></td></tr>
+              <tr><td colSpan={6} className="text-center py-12"><Loader2 className="animate-spin text-[#00174b] inline" /></td></tr>
             ) : users.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-12 text-slate-400 text-sm">No users found</td></tr>
+              <tr><td colSpan={6} className="text-center py-12 text-slate-400 text-sm">No users found</td></tr>
             ) : users.map(u => {
               const initials = u.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) ?? "?";
               const colorIdx = (u.name?.charCodeAt(0) ?? 0) % avatarColors.length;
@@ -87,9 +107,14 @@ export default function UsersPage() {
                       </div>
                     </div>
                   </td>
+                  <td className="px-5 py-4">
+                    <span className={cn("pill", orgPill[u.organisation ?? "GEOJIT"] ?? "pill-neu")}>
+                      {u.organisation ?? "GEOJIT"}
+                    </span>
+                  </td>
                   <td className="px-5 py-4"><span className={cn("pill", rolePill[u.role] ?? "pill-neu")}>{u.role === "OPS_MANAGER" ? "Ops Manager" : u.role}</span></td>
                   <td className="px-5 py-4 text-[11px] text-slate-500">{permissions[u.role] ?? "—"}</td>
-                  <td className="px-5 py-4 text-[11px] text-slate-500">{u.lastLogin ? new Date(u.lastLogin).toLocaleDateString("en-GB") : "Never"}</td>
+                  <td className="px-5 py-4 text-[11px] text-slate-500">{u.lastLogin ? fmtDate(u.lastLogin) : "Never"}</td>
                   <td className="px-5 py-4 text-right flex justify-end gap-3">
                     <button onClick={() => openEdit(u)} className="text-[11px] font-bold text-[#003ea8] hover:underline">Edit</button>
                     {u.isActive && (
@@ -115,6 +140,18 @@ export default function UsersPage() {
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block mb-1">Corporate email</label>
               <input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="user@geojit.co.in" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block mb-1">Organisation</label>
+              <select
+                value={form.organisation}
+                onChange={e => setForm(f => ({ ...f, organisation: e.target.value as UserOrganisation }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                disabled={!isAccAdmin}
+              >
+                <option value="GEOJIT">Geojit</option>
+                {isAccAdmin && <option value="ACC">ACC</option>}
+              </select>
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block mb-1">Role</label>
@@ -153,6 +190,19 @@ export default function UsersPage() {
                 <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block mb-1">Email</label>
                 <input value={form.email} disabled className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-400 cursor-not-allowed" />
               </div>
+              {isAccAdmin && (
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block mb-1">Organisation</label>
+                  <select
+                    value={form.organisation}
+                    onChange={e => setForm(f => ({ ...f, organisation: e.target.value as UserOrganisation }))}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="GEOJIT">Geojit</option>
+                    <option value="ACC">ACC</option>
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block mb-1">Role</label>
                 <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">

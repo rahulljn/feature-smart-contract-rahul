@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clientsApi, jobsApi } from "@/lib/api";
 import type { JobCustomer, EmailEvent } from "@/types";
 import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, fmtDate, fmtDateTime } from "@/lib/utils";
 import { downloadCsv } from "@/lib/export";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -147,7 +147,7 @@ export default function ClientDetailPage() {
                 <div key={`${h.jobId}-${h.partyCode}`} className="card p-3.5 flex items-center gap-3 hover:border-[#497cff] cursor-pointer">
                   <div className="p-2 bg-emerald-50 rounded-lg"><span className="material-symbols-outlined text-emerald-600">picture_as_pdf</span></div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-slate-900">{h.segment ?? "Contract Note"} · {h.tradeDate ? new Date(h.tradeDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</div>
+                    <div className="text-sm font-semibold text-slate-900">{h.segment ?? "Contract Note"} · {h.tradeDate ? fmtDate(h.tradeDate) : "—"}</div>
                     <div className="text-[11px] text-slate-500 mono">{h.fileName ?? "—"}</div>
                   </div>
                   <span className={cn("pill", h.emailStatus === "DELIVERED" ? "pill-ok" : h.emailStatus === "BOUNCED" ? "pill-err" : h.emailStatus === "FAILED" ? "pill-err" : "pill-neu")}>{EMAIL_LABEL[h.emailStatus] ?? PDF_LABEL[h.pdfStatus] ?? (h.emailStatus || h.pdfStatus)}</span>
@@ -243,7 +243,7 @@ export default function ClientDetailPage() {
                         <td className="px-4 py-3"><span className={cn("pill", ev.eventType === "DELIVERY" ? "pill-ok" : ev.eventType === "BOUNCE" ? "pill-err" : ev.eventType === "COMPLAINT" ? "pill-err" : "pill-neu")}>{{DELIVERY:"Delivered",BOUNCE:"Bounced",COMPLAINT:"Spam report",SEND:"Sent"}[ev.eventType] ?? ev.eventType}</span></td>
                         <td className="px-4 py-3 text-[11px] mono text-slate-600">{ev.recipientEmail ?? "—"}</td>
                         <td className="px-4 py-3 text-[11px] text-slate-500">{ev.bounceType ?? "—"}</td>
-                        <td className="px-4 py-3 text-[11px] text-slate-500">{ev.eventTimestamp ? new Date(ev.eventTimestamp).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                        <td className="px-4 py-3 text-[11px] text-slate-500">{ev.eventTimestamp ? fmtDateTime(ev.eventTimestamp) : "—"}</td>
                       </tr>
                     ))}
                   </tbody>

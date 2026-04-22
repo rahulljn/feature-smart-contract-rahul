@@ -14,4 +14,6 @@ public class UserRequest {
     private String password;
     @NotNull
     private User.Role role;
+    @NotNull
+    private User.Organisation organisation;
 }

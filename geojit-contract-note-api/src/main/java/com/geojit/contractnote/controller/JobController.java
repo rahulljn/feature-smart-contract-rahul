@@ -122,6 +122,18 @@ public class JobController {
                 PageResponse.from(jobService.getJobCustomers(jobId, pageable))));
     }
 
+    @GetMapping("/{jobId}/exceptions")
+    @Operation(summary = "Get paginated exceptions for a job (PDF failed, email failed/bounced/skipped)")
+    public ResponseEntity<ApiResponse<PageResponse<JobCustomerResponse>>> getExceptions(
+            @PathVariable UUID jobId,
+            @RequestParam(defaultValue = "ALL") String type,
+            @RequestParam(defaultValue = "0")   int page,
+            @RequestParam(defaultValue = "50")  int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return ResponseEntity.ok(ApiResponse.ok(
+                PageResponse.from(jobService.getExceptions(jobId, type, pageable))));
+    }
+
     // ─── Resend ───────────────────────────────────────────────────────────
 
     @PostMapping("/{jobId}/customers/{partyCode}/resend")

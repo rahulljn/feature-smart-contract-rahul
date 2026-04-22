@@ -7,7 +7,7 @@ import type { Job } from "@/types";
 import { Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { cn, toUtcDate } from "@/lib/utils";
 import { downloadCsv } from "@/lib/export";
 import { toast } from "sonner";
 
@@ -132,7 +132,7 @@ export default function JobsPage() {
                   <td className="px-5 py-3"><span className="seg-chip">{job.segmentType ?? "—"}</span></td>
                   <td className="px-5 py-3 text-right mono text-xs text-slate-700">{job.totalRecords?.toLocaleString() ?? "—"}</td>
                   <td className="px-5 py-3"><span className={cn("pill", statusPill[job.status] ?? "pill-neu")}><span className={cn("dot", statusDot[job.status] ?? "dot-info")} />{{VALIDATING:"Validating",SPLITTING:"Reading file",PROCESSING:"Generating PDFs",EMAILING:"Sending emails",COMPLETED:"Completed",FAILED:"Failed",PARTIAL:"Completed with issues"}[job.status] ?? job.status}</span></td>
-                  <td className="px-5 py-3 text-xs text-slate-500">{formatDistanceToNow(new Date(job.uploadedAt.endsWith("Z") ? job.uploadedAt : job.uploadedAt + "Z"), { addSuffix: true })}</td>
+                  <td className="px-5 py-3 text-xs text-slate-500">{formatDistanceToNow(toUtcDate(job.uploadedAt) ?? new Date(), { addSuffix: true })}</td>
                   <td className="px-5 py-3 text-xs text-slate-500">{job.uploadedBy?.name ?? "—"}</td>
                 </tr>
               ))}

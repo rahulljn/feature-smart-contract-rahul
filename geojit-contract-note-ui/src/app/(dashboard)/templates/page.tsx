@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { templatesApi } from "@/lib/api";
 import type { EmailTemplate, TemplateFieldsRequest, TemplateValidateResult } from "@/types";
 import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, fmtDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth";
 
@@ -246,7 +246,7 @@ export default function TemplatesPage() {
                     <td className="px-5 py-4 text-slate-500 text-[12px]">
                       {t.lastEditedAt
                         ? <>
-                            {new Date(t.lastEditedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                            {fmtDate(t.lastEditedAt)}
                             {t.lastEditedBy ? <span className="text-slate-400"> by {t.lastEditedBy.name}</span> : null}
                           </>
                         : <span className="text-slate-300">—</span>
@@ -288,7 +288,7 @@ export default function TemplatesPage() {
               </span>
               {template.lastEditedAt && (
                 <span className="text-[11px] text-slate-500">
-                  Last edited {new Date(template.lastEditedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                  Last edited {fmtDate(template.lastEditedAt)}
                   {template.lastEditedBy ? ` by ${template.lastEditedBy.name}` : ""}
                 </span>
               )}

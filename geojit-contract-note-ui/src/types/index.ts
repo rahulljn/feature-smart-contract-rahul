@@ -4,6 +4,7 @@ export interface AuthUser {
   email: string;
   name: string;
   role: "ADMIN" | "OPS_MANAGER" | "VIEWER";
+  organisation?: "ACC" | "GEOJIT";
   accessToken: string;
   tokenType: string;
   expiresIn: number;
@@ -215,12 +216,14 @@ export interface AuditLog {
 
 // ─── User ─────────────────────────────────────────────────────────────
 export type UserRole = "ADMIN" | "OPS_MANAGER" | "VIEWER";
+export type UserOrganisation = "ACC" | "GEOJIT";
 
 export interface AppUser {
   userId: string;
   email: string;
   name: string;
   role: UserRole;
+  organisation: UserOrganisation;
   isActive: boolean;
   lastLogin?: string;
   createdAt: string;
@@ -256,6 +259,14 @@ export interface ValidationResult {
 }
 
 // ─── SES Statistics ──────────────────────────────────────────────────
+export interface SesDataPoint {
+  timestamp: string;
+  sends: number;
+  bounces: number;
+  complaints: number;
+  rejects: number;
+}
+
 export interface SesStatistics {
   reputationScore: number;
   sendRate: number;
@@ -263,4 +274,7 @@ export interface SesStatistics {
   complaintRate: number;
   dailySendQuota: number;
   sentLast24h: number;
+  remainingSends: number;
+  quotaUsedPercent: number;
+  dataPoints: SesDataPoint[];
 }

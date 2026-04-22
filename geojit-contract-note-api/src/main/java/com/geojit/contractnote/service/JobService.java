@@ -87,6 +87,17 @@ public class JobService {
                 .map(JobCustomerResponse::from);
     }
 
+    @Transactional(readOnly = true)
+    public Page<JobCustomerResponse> getExceptions(UUID jobId, String type, Pageable pageable) {
+        return switch (type.toUpperCase()) {
+            case "PDF"     -> jobCustomerRepository.findPdfFailedByJobId(jobId, pageable).map(JobCustomerResponse::from);
+            case "EMAIL"   -> jobCustomerRepository.findEmailFailedByJobId(jobId, pageable).map(JobCustomerResponse::from);
+            case "BOUNCE"  -> jobCustomerRepository.findBouncedByJobId(jobId, pageable).map(JobCustomerResponse::from);
+            case "SKIPPED" -> jobCustomerRepository.findSkippedByJobId(jobId, pageable).map(JobCustomerResponse::from);
+            default        -> jobCustomerRepository.findAllExceptionsByJobId(jobId, pageable).map(JobCustomerResponse::from);
+        };
+    }
+
     public Page<JobCustomerResponse> getFailedCustomers(UUID jobId, Pageable pageable) {
         return jobCustomerRepository.findByJob_JobId(jobId, pageable)
                 .map(JobCustomerResponse::from)

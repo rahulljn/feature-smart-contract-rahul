@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { auditApi } from "@/lib/api";
 import type { AuditLog } from "@/types";
 import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, fmtDateTime } from "@/lib/utils";
 import { downloadCsv } from "@/lib/export";
 import { toast } from "sonner";
 
@@ -117,7 +117,7 @@ export default function AuditPage() {
             <tbody>
               {logs.map((log, i) => (
                 <tr key={i} className="t-row">
-                  <td className="px-5 py-3 text-[11px] text-slate-500 mono">{new Date(log.eventTimestamp).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" })}</td>
+                  <td className="px-5 py-3 text-[11px] text-slate-500 mono">{fmtDateTime(log.eventTimestamp)}</td>
                   <td className="px-5 py-3 text-xs font-semibold">{log.userEmail ?? "—"}</td>
                   <td className="px-5 py-3"><span className={cn("pill", actionPill[log.action] ?? "pill-neu")}>{ACTION_LABEL[log.action] ?? log.action}</span></td>
                   <td className="px-5 py-3 text-xs mono">{log.targetEntity ?? "—"}</td>

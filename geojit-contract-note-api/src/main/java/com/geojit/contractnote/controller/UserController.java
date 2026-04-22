@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.http.*;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -27,24 +28,29 @@ public class UserController {
     @GetMapping
     @Operation(summary = "List all users")
     public ResponseEntity<ApiResponse<PageResponse<User>>> getAll(
+            @AuthenticationPrincipal User caller,
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.ok(
-                PageResponse.from(userService.getAll(PageRequest.of(page, size)))));
+                PageResponse.from(userService.getAll(caller, PageRequest.of(page, size)))));
     }
 
     @PostMapping
     @Operation(summary = "Create a new user")
-    public ResponseEntity<ApiResponse<User>> create(@Valid @RequestBody UserRequest req) {
+    public ResponseEntity<ApiResponse<User>> create(
+            @AuthenticationPrincipal User caller,
+            @Valid @RequestBody UserRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok("User created", userService.create(req)));
+                .body(ApiResponse.ok("User created", userService.create(req, caller)));
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Update user")
     public ResponseEntity<ApiResponse<User>> update(
-            @PathVariable UUID id, @Valid @RequestBody UserRequest req) {
-        return ResponseEntity.ok(ApiResponse.ok("User updated", userService.update(id, req)));
+            @AuthenticationPrincipal User caller,
+            @PathVariable UUID id,
+            @Valid @RequestBody UserRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("User updated", userService.update(id, req, caller)));
     }
 
     @DeleteMapping("/{id}")

@@ -90,7 +90,31 @@ public interface JobCustomerRepository extends JpaRepository<JobCustomer, Long> 
         return findAllBounced(JobCustomer.EmailStatus.BOUNCED);
     }
 
+    /** Count emails actually dispatched in the last 24 hours (from our own records) */
+    @Query("SELECT COUNT(jc) FROM JobCustomer jc WHERE jc.emailSentAt >= :since AND jc.emailStatus IN ('SENT','DELIVERED','BOUNCED')")
+    long countEmailsSentSince(@Param("since") LocalDateTime since);
+
     /** All customers for a specific job matching any of the given party codes */
     @Query("SELECT jc FROM JobCustomer jc WHERE jc.job.jobId = :jobId AND jc.partyCode IN :partyCodes")
     List<JobCustomer> findByJobIdAndPartyCodes(@Param("jobId") UUID jobId, @Param("partyCodes") List<String> partyCodes);
+
+    /** Exceptions: PDF failed or email failed/bounced/skipped — server-side paginated */
+    @Query("""
+            SELECT jc FROM JobCustomer jc WHERE jc.job.jobId = :jobId
+              AND (jc.pdfStatus = 'FAILED'
+               OR  jc.emailStatus IN ('FAILED','BOUNCED','SKIPPED'))
+            """)
+    Page<JobCustomer> findAllExceptionsByJobId(@Param("jobId") UUID jobId, Pageable pageable);
+
+    @Query("SELECT jc FROM JobCustomer jc WHERE jc.job.jobId = :jobId AND jc.pdfStatus = 'FAILED'")
+    Page<JobCustomer> findPdfFailedByJobId(@Param("jobId") UUID jobId, Pageable pageable);
+
+    @Query("SELECT jc FROM JobCustomer jc WHERE jc.job.jobId = :jobId AND jc.emailStatus = 'FAILED'")
+    Page<JobCustomer> findEmailFailedByJobId(@Param("jobId") UUID jobId, Pageable pageable);
+
+    @Query("SELECT jc FROM JobCustomer jc WHERE jc.job.jobId = :jobId AND jc.emailStatus = 'BOUNCED'")
+    Page<JobCustomer> findBouncedByJobId(@Param("jobId") UUID jobId, Pageable pageable);
+
+    @Query("SELECT jc FROM JobCustomer jc WHERE jc.job.jobId = :jobId AND jc.emailStatus = 'SKIPPED'")
+    Page<JobCustomer> findSkippedByJobId(@Param("jobId") UUID jobId, Pageable pageable);
 }

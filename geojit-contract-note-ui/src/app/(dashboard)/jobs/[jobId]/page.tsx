@@ -6,7 +6,7 @@ import { jobsApi, pipelineApi } from "@/lib/api";
 import { downloadCsv } from "@/lib/export";
 import type { Job, JobCustomer, PipelineEvent } from "@/types";
 import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, fmtDateTime, fmtTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth";
 import Link from "next/link";
@@ -266,7 +266,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
                 { label: "Trade date",   value: job.tradeDate ?? "—" },
                 { label: "Input file",   value: job.fileName ?? "—" },
                 { label: "Uploaded by",  value: job.uploadedBy?.name ?? "—" },
-                { label: "Uploaded at",  value: job.uploadedAt ? new Date(job.uploadedAt).toLocaleString("en-GB") : "—" },
+                { label: "Uploaded at",  value: fmtDateTime(job.uploadedAt) },
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between border-b border-slate-100 pb-2">
                   <span className="text-slate-500">{label}</span>
@@ -445,7 +445,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
                         </div>
                         <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
                           {ev.partyCode && <span className="mono font-semibold text-slate-600">{normaliseCode(ev.partyCode)}</span>}
-                          {ev.eventTimestamp && <span>{new Date(ev.eventTimestamp).toLocaleTimeString("en-GB")}</span>}
+                          {ev.eventTimestamp && <span>{fmtTime(ev.eventTimestamp)}</span>}
                         </div>
                       </div>
                     </div>
@@ -619,7 +619,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
                   normaliseCode(c.partyCode), c.email ?? "",
                   PDF_LABEL[c.pdfStatus] ?? c.pdfStatus,
                   EMAIL_LABEL[c.emailStatus] ?? c.emailStatus,
-                  c.deliveredAt ? new Date(c.deliveredAt).toLocaleString("en-GB") : ""
+                  c.deliveredAt ? fmtDateTime(c.deliveredAt) : ""
                 ])
               )}
               className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 flex items-center gap-1.5"
@@ -672,7 +672,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
                       </td>
                       <td className="px-5 py-3 text-[11px] text-slate-500">
                         {c.deliveredAt
-                          ? new Date(c.deliveredAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+                          ? fmtTime(c.deliveredAt)
                           : <span className="text-slate-300">—</span>
                         }
                       </td>

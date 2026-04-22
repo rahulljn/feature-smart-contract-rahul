@@ -54,6 +54,8 @@ export const jobsApi = {
   get: (jobId: string) => api.get(`/jobs/${jobId}`),
   customers: (jobId: string, page = 0, size = 50) =>
     api.get(`/jobs/${jobId}/customers`, { params: { page, size } }),
+  exceptions: (jobId: string, type = "ALL", page = 0, size = 50) =>
+    api.get(`/jobs/${jobId}/exceptions`, { params: { type, page, size } }),
   upload: (form: FormData) =>
     api.post("/jobs/upload", form, { headers: { "Content-Type": "multipart/form-data" } }),
   validate: (form: FormData) =>
@@ -122,7 +124,8 @@ export const configApi = {
   certActivate: (id: string) => api.post(`/config/certificates/${id}/activate`),
   certUpload: (form: FormData) =>
     api.post("/config/certificates/upload", form, { headers: { "Content-Type": "multipart/form-data" } }),
-  sesStatistics: () => api.get("/config/ses/statistics"),
+  sesStatistics: (startDate?: string, endDate?: string) =>
+    api.get("/config/ses/statistics", { params: { startDate: startDate || undefined, endDate: endDate || undefined } }),
 };
 
 export const usersApi = {
