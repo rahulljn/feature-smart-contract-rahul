@@ -56,7 +56,7 @@ export function Header() {
   }, [showAlerts]);
 
   // Real pipeline metrics for status badge and notifications
-  const { data: metricsRes, refetch: refetchMetrics } = useQuery({
+  const { data: metricsRes } = useQuery({
     queryKey: ["header-metrics"],
     queryFn: () => dashboardApi.metrics(
       new Date().toISOString().slice(0, 10),
@@ -148,18 +148,20 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-1.5">
-        {/* Global search → navigates to client profile */}
-        <div className="relative hidden lg:block">
-          <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-base">search</span>
-          <input
-            value={searchVal}
-            onChange={e => setSearchVal(e.target.value)}
-            onKeyDown={handleSearch}
-            className="pl-8 pr-3 py-1.5 bg-slate-100 border-none rounded-full text-sm w-52 focus:w-64 transition-all focus:outline-none"
-            placeholder="Client code or PAN…"
-            title="Press Enter to open client profile"
-          />
-        </div>
+        {/* Global search → navigates to client profile (dashboard only) */}
+        {base === "/dashboard" && (
+          <div className="relative hidden lg:block">
+            <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-base">search</span>
+            <input
+              value={searchVal}
+              onChange={e => setSearchVal(e.target.value)}
+              onKeyDown={handleSearch}
+              className="pl-8 pr-3 py-1.5 bg-slate-100 border-none rounded-full text-sm w-52 focus:w-64 transition-all focus:outline-none"
+              placeholder="Client code or PAN…"
+              title="Press Enter to open client profile"
+            />
+          </div>
+        )}
 
         {/* Notifications bell */}
         <div className="relative" ref={alertsRef}>
@@ -205,15 +207,6 @@ export function Header() {
             </div>
           )}
         </div>
-
-        {/* Refresh */}
-        <button
-          onClick={() => { refetchMetrics(); }}
-          className="p-2 text-slate-500 hover:text-[#00174b] hover:bg-slate-100 rounded-lg transition-colors"
-          title="Refresh metrics"
-        >
-          <span className="material-symbols-outlined text-xl">refresh</span>
-        </button>
 
         <div className="text-[11px] text-slate-500 mono tabular px-2">{clock}</div>
         <div className="h-7 w-px bg-slate-200 mx-1" />

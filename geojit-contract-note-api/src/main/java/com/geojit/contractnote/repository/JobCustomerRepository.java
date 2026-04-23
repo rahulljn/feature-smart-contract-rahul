@@ -118,6 +118,23 @@ public interface JobCustomerRepository extends JpaRepository<JobCustomer, Long> 
     @Query("SELECT jc FROM JobCustomer jc WHERE jc.job.jobId = :jobId AND jc.partyCode IN :partyCodes")
     List<JobCustomer> findByJobIdAndPartyCodes(@Param("jobId") UUID jobId, @Param("partyCodes") List<String> partyCodes);
 
+    /** Cross-job paginated listing for the Resend page — filter by email statuses, optional job and date range */
+    @Query("""
+            SELECT jc FROM JobCustomer jc
+            WHERE jc.emailStatus IN :statuses
+              AND (:jobId IS NULL OR jc.job.jobId = :jobId)
+              AND (:from  IS NULL OR jc.createdAt >= :from)
+              AND (:to    IS NULL OR jc.createdAt <= :to)
+            ORDER BY jc.createdAt DESC
+            """)
+    Page<JobCustomer> findGlobalByEmailStatuses(
+            @Param("statuses") List<JobCustomer.EmailStatus> statuses,
+            @Param("jobId")    UUID jobId,
+            @Param("from")     LocalDateTime from,
+            @Param("to")       LocalDateTime to,
+            Pageable pageable
+    );
+
     /** Exceptions: PDF failed or email failed/bounced/skipped — server-side paginated */
     @Query("""
             SELECT jc FROM JobCustomer jc WHERE jc.job.jobId = :jobId

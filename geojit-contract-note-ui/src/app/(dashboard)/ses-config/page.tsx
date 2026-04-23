@@ -192,14 +192,6 @@ export default function SesConfigPage() {
             <span className="font-bold text-slate-900 headline text-base">Sending statistics</span>
             <Info className="w-3.5 h-3.5 text-slate-400" />
           </div>
-          <button
-            onClick={() => refetchStats()}
-            disabled={loadingStats}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50"
-            title="Refresh"
-          >
-            {loadingStats ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          </button>
         </div>
         <p className="text-[12px] text-slate-500 mb-4">
           The following charts show the number of successful send requests, as well as the rejection, bounce and complaint rates

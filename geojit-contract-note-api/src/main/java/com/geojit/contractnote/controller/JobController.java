@@ -3,6 +3,7 @@ package com.geojit.contractnote.controller;
 import com.geojit.contractnote.dto.request.ResendRequest;
 import com.geojit.contractnote.dto.response.*;
 import com.geojit.contractnote.entity.*;
+import com.geojit.contractnote.repository.JobCustomerRepository;
 import com.geojit.contractnote.repository.UserRepository;
 import com.geojit.contractnote.service.CloudWatchService;
 import com.geojit.contractnote.service.FileValidationService;
@@ -18,6 +19,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.*;
 import org.springframework.context.event.EventListener;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,6 +30,9 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -42,12 +47,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @SecurityRequirement(name = "BearerAuth")
 public class JobController {
 
-    private final JobService            jobService;
-    private final ResendService         resendService;
-    private final PipelineService       pipelineService;
-    private final CloudWatchService     cloudWatchService;
-    private final UserRepository        userRepository;
-    private final FileValidationService fileValidationService;
+    private final JobService              jobService;
+    private final ResendService           resendService;
+    private final PipelineService         pipelineService;
+    private final CloudWatchService       cloudWatchService;
+    private final UserRepository          userRepository;
+    private final FileValidationService   fileValidationService;
+    private final JobCustomerRepository   jobCustomerRepository;
 
     // SSE emitters keyed by jobId — supports concurrent listeners
     private final ConcurrentHashMap<UUID, CopyOnWriteArrayList<SseEmitter>> emitters =
@@ -225,6 +231,31 @@ public class JobController {
         UUID templateId = resolveTemplateId(body);
         int queued = resendService.bulkResendAllBounced(user, httpRequest, templateId);
         return ResponseEntity.ok(ApiResponse.ok("Global bounce retry triggered", Map.of("queued", queued)));
+    }
+
+    @GetMapping("/failed-customers")
+    @Operation(summary = "Paginated list of failed/bounced email customers across all jobs (for Resend page table)")
+    public ResponseEntity<ApiResponse<PageResponse<JobCustomerResponse>>> getFailedCustomers(
+            @RequestParam(defaultValue = "BOUNCED,FAILED") String statuses,
+            @RequestParam(required = false) UUID jobId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "50") int size) {
+
+        List<JobCustomer.EmailStatus> statusList = Arrays.stream(statuses.split(","))
+                .map(s -> JobCustomer.EmailStatus.valueOf(s.trim()))
+                .toList();
+
+        LocalDateTime fromDt = from != null ? from.atStartOfDay() : null;
+        LocalDateTime toDt   = to   != null ? to.plusDays(1).atStartOfDay() : null;
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<JobCustomerResponse> result = jobCustomerRepository
+                .findGlobalByEmailStatuses(statusList, jobId, fromDt, toDt, pageable)
+                .map(JobCustomerResponse::from);
+
+        return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(result)));
     }
 
     private UUID resolveTemplateId(Map<String, String> body) {

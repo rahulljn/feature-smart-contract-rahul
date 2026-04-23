@@ -69,6 +69,15 @@ export const jobsApi = {
     api.post(`/jobs/${jobId}/bulk-resend-codes`, { partyCodes, ...(templateId ? { templateId } : {}) }),
   bulkResendAllBounced: (templateId?: string) =>
     api.post("/jobs/bulk-resend-all-bounced", templateId ? { templateId } : undefined),
+  failedCustomers: (page = 0, size = 50, statuses?: string, jobId?: string, from?: string, to?: string) =>
+    api.get("/jobs/failed-customers", {
+      params: { page, size,
+        statuses: statuses || undefined,
+        jobId: jobId || undefined,
+        from: from || undefined,
+        to: to || undefined,
+      },
+    }),
   pipelineStats: (jobId: string) => api.get(`/jobs/${jobId}/pipeline-stats`),
   exceptionCounts: (jobId: string) => api.get(`/jobs/${jobId}/exception-counts`),
   cloudwatchExceptions: (jobId: string, type = "ALL") =>
