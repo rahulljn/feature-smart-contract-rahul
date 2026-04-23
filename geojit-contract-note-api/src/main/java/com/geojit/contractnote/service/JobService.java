@@ -15,17 +15,22 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class JobService {
 
-    private final JobRepository         jobRepository;
-    private final JobCustomerRepository jobCustomerRepository;
-    private final S3Service             s3Service;
-    private final AppProperties         appProperties;
+    private final JobRepository             jobRepository;
+    private final JobCustomerRepository     jobCustomerRepository;
+    private final PipelineEventRepository   pipelineEventRepository;
+    private final S3Service                 s3Service;
+    private final AppProperties             appProperties;
 
     @Transactional
     public JobResponse uploadAndCreateJob(MultipartFile file, String segmentType,
@@ -109,6 +114,62 @@ public class JobService {
         Job job = findJobById(jobId);
         job.setStatus(status);
         return JobResponse.from(jobRepository.save(job));
+    }
+
+    @Transactional(readOnly = true)
+    public PipelineStatsResponse getPipelineStats(UUID jobId) {
+        Job job = findJobById(jobId);
+
+        // Throughput: events in the last 60 seconds
+        LocalDateTime since = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(60);
+        List<Object[]> recentEvents = pipelineEventRepository.countRecentEventsByType(jobId, since);
+        Map<String, Long> rates = recentEvents.stream()
+                .collect(Collectors.toMap(
+                        row -> (String) row[0],
+                        row -> ((Number) row[1]).longValue()
+                ));
+
+        // Latency percentiles (null-safe: returns zeros if no emails sent yet)
+        Object[] latency = jobCustomerRepository.calculateLatencyPercentiles(jobId);
+        double median = latency != null && latency[0] != null ? ((Number) latency[0]).doubleValue() : 0.0;
+        double p95    = latency != null && latency[1] != null ? ((Number) latency[1]).doubleValue() : 0.0;
+
+        long total      = Math.max(job.getTotalCustomers(), 1); // avoid divide-by-zero
+        long pdfFailed  = job.getFailedCount();
+        long emailFailed = job.getEmailFailedCount();
+
+        return PipelineStatsResponse.builder()
+                .jobId(job.getJobId())
+                .fileName(job.getFileName())
+                .status(job.getStatus().name())
+                .uploadCount(job.getTotalCustomers())
+                .splitCount(job.getProcessedCount())
+                .pdfCount(job.getPdfGeneratedCount())
+                .pdfFailed(pdfFailed)
+                .pdfPending(Math.max(0, job.getTotalCustomers() - job.getPdfGeneratedCount() - pdfFailed))
+                .pdfRate(rates.getOrDefault("PDF_GENERATED", 0L))
+                .emailCount(job.getEmailSentCount())
+                .emailBounced(job.getEmailBouncedCount())
+                .emailFailed(emailFailed)
+                .emailPending(Math.max(0, job.getPdfGeneratedCount() - job.getEmailSentCount() - emailFailed))
+                .emailRate(rates.getOrDefault("EMAIL_SENT", 0L))
+                .deliveredCount(job.getEmailDeliveredCount())
+                .deliveredRate(rates.getOrDefault("DELIVERY", 0L))
+                .medianSeconds(median)
+                .p95Seconds(p95)
+                .errorRate(Math.round((double)(pdfFailed + emailFailed) / total * 10000.0) / 100.0)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public ExceptionCountsResponse getExceptionCounts(UUID jobId) {
+        findJobById(jobId); // validate existence
+        return ExceptionCountsResponse.builder()
+                .pdfFailed(jobCustomerRepository.countByJob_JobIdAndPdfStatus(jobId, JobCustomer.PdfStatus.FAILED))
+                .emailFailed(jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.FAILED))
+                .bounced(jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.BOUNCED))
+                .skipped(jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.SKIPPED))
+                .build();
     }
 
     private Job findJobById(UUID jobId) {

@@ -53,4 +53,24 @@ public class SuppressionController {
         suppressionService.remove(email);
         return ResponseEntity.ok(ApiResponse.ok("Email removed from suppression", null));
     }
+
+    @PostMapping("/push-aws")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Push all local suppression entries to AWS SES account suppression list")
+    public ResponseEntity<ApiResponse<String>> pushToAws() {
+        int count = suppressionService.pushToAws();
+        return ResponseEntity.ok(ApiResponse.ok(
+                count + " local entries pushed to AWS SES account suppression list",
+                String.valueOf(count)));
+    }
+
+    @PostMapping("/sync-aws")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Sync suppression list from AWS SES account suppression list")
+    public ResponseEntity<ApiResponse<String>> syncFromAws() {
+        int count = suppressionService.syncFromAws();
+        return ResponseEntity.ok(ApiResponse.ok(
+                count > 0 ? count + " new entries synced from AWS SES" : "Already in sync — no new entries found",
+                String.valueOf(count)));
+    }
 }

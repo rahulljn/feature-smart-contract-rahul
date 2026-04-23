@@ -11,7 +11,6 @@ public class DashboardMetricsResponse {
     private long totalPdfsGenerated;
     private long totalEmailsSent;
     private long totalDelivered;
-    private long totalConfirmed;
     private long totalBounced;
     private double bounceRate;
     private double deliveryRate;

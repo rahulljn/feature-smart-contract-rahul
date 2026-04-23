@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 
 const PDF_LABEL: Record<string, string> = { PENDING: "Pending", GENERATED: "Ready", FAILED: "Failed" };
-const EMAIL_LABEL: Record<string, string> = { PENDING: "Pending", SENT: "Dispatched", DELIVERED: "Delivered", BOUNCED: "Bounced", FAILED: "Failed", SKIPPED: "Failed" };
+const EMAIL_LABEL: Record<string, string> = { PENDING: "Pending", SENT: "Sent", DELIVERED: "Delivered", BOUNCED: "Bounced", FAILED: "Failed", SKIPPED: "Failed" };
 const EVENT_LABEL: Record<string, string> = { DELIVERY: "Delivered", BOUNCE: "Bounced", COMPLAINT: "Spam report", SEND: "Sent", EMAIL_SENT: "Sent" };
 
 export default function ClientDetailPage() {

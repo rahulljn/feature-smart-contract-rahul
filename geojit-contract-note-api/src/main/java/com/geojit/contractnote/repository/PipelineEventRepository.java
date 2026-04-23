@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -27,4 +28,15 @@ public interface PipelineEventRepository extends JpaRepository<PipelineEvent, Lo
     List<Object[]> findHourlyEventCountsBetween(@org.springframework.data.repository.query.Param("start") LocalDateTime start, @org.springframework.data.repository.query.Param("end") LocalDateTime end);
 
     List<PipelineEvent> findTop10ByEventTimestampAfterOrderByEventTimestampDesc(LocalDateTime since);
+
+    /** Count recent events per type for throughput calculation (events in last N seconds) */
+    @Query(value = """
+            SELECT event_type, COUNT(*) AS cnt
+            FROM pipeline_events
+            WHERE job_id = :jobId
+              AND event_timestamp >= :since
+              AND event_type IN ('PDF_GENERATED','EMAIL_SENT','DELIVERY','BOUNCE')
+            GROUP BY event_type
+            """, nativeQuery = true)
+    List<Object[]> countRecentEventsByType(@Param("jobId") UUID jobId, @Param("since") LocalDateTime since);
 }

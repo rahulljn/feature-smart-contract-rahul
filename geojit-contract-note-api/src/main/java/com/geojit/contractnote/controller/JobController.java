@@ -4,6 +4,7 @@ import com.geojit.contractnote.dto.request.ResendRequest;
 import com.geojit.contractnote.dto.response.*;
 import com.geojit.contractnote.entity.*;
 import com.geojit.contractnote.repository.UserRepository;
+import com.geojit.contractnote.service.CloudWatchService;
 import com.geojit.contractnote.service.FileValidationService;
 import com.geojit.contractnote.service.JobService;
 import com.geojit.contractnote.service.PipelineService;
@@ -44,6 +45,7 @@ public class JobController {
     private final JobService            jobService;
     private final ResendService         resendService;
     private final PipelineService       pipelineService;
+    private final CloudWatchService     cloudWatchService;
     private final UserRepository        userRepository;
     private final FileValidationService fileValidationService;
 
@@ -120,6 +122,26 @@ public class JobController {
         Pageable pageable = PageRequest.of(page, size);
         return ResponseEntity.ok(ApiResponse.ok(
                 PageResponse.from(jobService.getJobCustomers(jobId, pageable))));
+    }
+
+    @GetMapping("/{jobId}/pipeline-stats")
+    @Operation(summary = "Get live pipeline stage counts, throughput rates, and latency metrics for a job")
+    public ResponseEntity<ApiResponse<PipelineStatsResponse>> getPipelineStats(@PathVariable UUID jobId) {
+        return ResponseEntity.ok(ApiResponse.ok(jobService.getPipelineStats(jobId)));
+    }
+
+    @GetMapping("/{jobId}/exception-counts")
+    @Operation(summary = "Get accurate exception counts per type derived from live DB records (bypasses stale aggregate counters)")
+    public ResponseEntity<ApiResponse<ExceptionCountsResponse>> getExceptionCounts(@PathVariable UUID jobId) {
+        return ResponseEntity.ok(ApiResponse.ok(jobService.getExceptionCounts(jobId)));
+    }
+
+    @GetMapping("/{jobId}/cloudwatch-exceptions")
+    @Operation(summary = "Get real-time Lambda exception logs from CloudWatch for a job, grouped per Lambda function")
+    public ResponseEntity<ApiResponse<List<CloudWatchLambdaResponse>>> getCloudWatchExceptions(
+            @PathVariable UUID jobId,
+            @RequestParam(defaultValue = "ALL") String type) {
+        return ResponseEntity.ok(ApiResponse.ok(cloudWatchService.getExceptionLogs(jobId, type)));
     }
 
     @GetMapping("/{jobId}/exceptions")

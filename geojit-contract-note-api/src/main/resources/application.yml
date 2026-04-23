@@ -88,6 +88,15 @@ app:
     presigned-url-expiry-hours: 168   # 7 days
     sns:
       ses-topic-arn: ${SNS_SES_TOPIC_ARN:arn:aws:sns:ap-south-1:021859069003:geojit-ses-notifications}
+    cloudwatch:
+      split-lambda-log-group:    ${CW_SPLIT_LOG_GROUP:/aws/lambda/split-lambda-geojit}
+      invoke-lambda-log-group:   ${CW_INVOKE_LOG_GROUP:/aws/lambda/invoke-lambda-geojit}
+      pdf-lambda-log-group:      ${CW_PDF_LOG_GROUP:/aws/lambda/create-pdf-geojit}
+      json-lambda-log-group:     ${CW_JSON_LOG_GROUP:/aws/lambda/json-lambda-geojit}
+      email-lambda-log-group:    ${CW_EMAIL_LOG_GROUP:/aws/lambda/email-notification-geojit}
+      bounce-lambda-log-group:   ${CW_BOUNCE_LOG_GROUP:/aws/lambda/pull-bounce-geojit}
+      delivery-lambda-log-group: ${CW_DELIVERY_LOG_GROUP:/aws/lambda/pull-delivery-geojit}
+      status-consumer-log-group: ${CW_STATUS_CONSUMER_LOG_GROUP:/aws/lambda/status-consumer-geojit}
 
   cors:
     allowed-origins: http://localhost:3000,http://localhost:3001

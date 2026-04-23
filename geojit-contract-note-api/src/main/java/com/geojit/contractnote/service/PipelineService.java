@@ -147,9 +147,8 @@ public class PipelineService {
                             jobRepository.incrementEmailFailedCount(event.getJobId());
                         }
                         case EMAIL_SKIPPED -> {
-                            // No address on file — counts as delivery failure
-                            jc.setEmailStatus(JobCustomer.EmailStatus.FAILED);
-                            jobRepository.incrementEmailFailedCount(event.getJobId());
+                            jc.setEmailStatus(JobCustomer.EmailStatus.SKIPPED);
+                            jobRepository.incrementEmailSkippedCount(event.getJobId());
                         }
                         case DELIVERY -> {
                             // Idempotency: only process if not already DELIVERED (SNS may retry)
@@ -233,39 +232,34 @@ public class PipelineService {
             int total = job.getTotalCustomers();
             if (total <= 0) return;
 
-            // Final completion: query actual DB counts for all terminal states
-            long registered   = jobCustomerRepository.countByJob_JobId(jobId);
-            long unregistered = Math.max(0, total - registered); // customers Lambda never registered (invalid in raw file)
-            long sent         = jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.SENT);
-            long delivered    = jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.DELIVERED);
-            long bounced      = jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.BOUNCED);
-            long emailFailed  = jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.FAILED);
-            long pdfFailed    = jobCustomerRepository.countByJob_JobIdAndPdfStatus(jobId, JobCustomer.PdfStatus.FAILED);
-            long done         = sent + delivered + bounced + emailFailed + pdfFailed + unregistered;
+            // Use job-level counters (incremented per raw event, including duplicate party codes).
+            // Counting job_customers rows would be wrong when a file has multiple rows for the
+            // same party code — those rows are deduplicated in job_customers but each one still
+            // generates a real PDF and email that must be counted toward completion.
+            long pdfFailed   = job.getFailedCount();       // running count from PDF_FAILED events
+            long emailSent   = job.getEmailSentCount();    // running count from EMAIL_SENT events
+            long emailFailed = job.getEmailFailedCount();  // running count from EMAIL_FAILED + EMAIL_SKIPPED events
+            long done        = emailSent + emailFailed + pdfFailed;
 
-            // PROCESSING → EMAILING: all PDFs accounted for (generated + pdfFailed + unregistered = total)
+            // PROCESSING → EMAILING
             if (job.getStatus() == Job.JobStatus.PROCESSING) {
-                long pdfDone = job.getPdfGeneratedCount() + pdfFailed + unregistered;
+                long pdfDone = job.getPdfGeneratedCount() + pdfFailed;
                 if (pdfDone >= total) {
                     job.setStatus(Job.JobStatus.EMAILING);
                     jobRepository.save(job);
-                    log.info("Job transitioned to EMAILING | jobId={} | pdfDone={}/{} (unregistered={})", jobId, pdfDone, total, unregistered);
+                    log.info("Job transitioned to EMAILING | jobId={} | pdfDone={}/{}", jobId, pdfDone, total);
                 }
             }
 
             if (done >= total) {
-                long invalidCount  = pdfFailed + unregistered;
-                job.setFailedCount((int) invalidCount);
-                job.setEmailFailedCount((int) emailFailed);
-
-                if (invalidCount > 0 || bounced > 0 || emailFailed > 0) {
+                if (pdfFailed > 0 || emailFailed > 0 || job.getEmailBouncedCount() > 0) {
                     job.setStatus(Job.JobStatus.PARTIAL);
                 } else {
                     job.setStatus(Job.JobStatus.COMPLETED);
                 }
                 jobRepository.save(job);
-                log.info("Job completed | jobId={} | status={} | done={}/{} | invalid={} (pdfFailed={} unregistered={}) | emailFailed={} | bounced={}",
-                        jobId, job.getStatus(), done, total, invalidCount, pdfFailed, unregistered, emailFailed, bounced);
+                log.info("Job completed | jobId={} | status={} | done={}/{} | pdfFailed={} | emailFailed={} | bounced={}",
+                        jobId, job.getStatus(), done, total, pdfFailed, emailFailed, job.getEmailBouncedCount());
             }
         });
     }

@@ -3,20 +3,28 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { jobsApi } from "@/lib/api";
-import type { Job, JobCustomer } from "@/types";
+import type { Job, JobCustomer, CloudWatchLambda } from "@/types";
 import { Loader2 } from "lucide-react";
 import { cn, fmtDateTime } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
 import { toast } from "sonner";
 
-type TabKey = "ALL" | "PDF" | "EMAIL" | "BOUNCE" | "SKIPPED";
+type TabKey = "SPLIT" | "INVOKE" | "GETJSON" | "PDF" | "EMAIL" | "PULLBOUNCE" | "PULLDELIVERY";
 
-const TABS: { label: string; key: TabKey }[] = [
-  { label: "All", key: "ALL" },
-  { label: "PDF failures", key: "PDF" },
-  { label: "Email failures", key: "EMAIL" },
-  { label: "Bounced", key: "BOUNCE" },
-  { label: "Skipped", key: "SKIPPED" },
+interface TabConfig {
+  label: string;
+  key: TabKey;
+  dbType: string | null;
+}
+
+const TABS: TabConfig[] = [
+  { label: "Split",         key: "SPLIT",        dbType: null     },
+  { label: "Invoke",        key: "INVOKE",       dbType: null     },
+  { label: "GetJson",       key: "GETJSON",      dbType: null     },
+  { label: "PDF",           key: "PDF",          dbType: "PDF"    },
+  { label: "Email",         key: "EMAIL",        dbType: "EMAIL"  },
+  { label: "Pull Bounce",   key: "PULLBOUNCE",   dbType: "BOUNCE" },
+  { label: "Pull Delivery", key: "PULLDELIVERY", dbType: null     },
 ];
 
 const normaliseCode = (code: string) => code?.split("/")[0] ?? code;
@@ -61,13 +69,119 @@ function statusBadge(status: string) {
   return map[status] ?? "pill-neu";
 }
 
+function CloudWatchSection({ jobId, tabKey }: { jobId: string; tabKey: TabKey }) {
+  const [open, setOpen] = useState(true);
+  const [expandedLambda, setExpandedLambda] = useState<string | null>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["cw-exceptions", jobId, tabKey],
+    queryFn: () => jobsApi.cloudwatchExceptions(jobId, tabKey),
+    enabled: !!jobId && open,
+    refetchInterval: 30_000,
+    staleTime: 25_000,
+  });
+
+  const lambdas: CloudWatchLambda[] = data?.data?.data ?? [];
+  const totalErrors = lambdas.reduce((s, l) => s + l.errorCount, 0);
+
+  const toggleLambda = (name: string) =>
+    setExpandedLambda(prev => (prev === name ? null : name));
+
+  return (
+    <div className="border-t border-slate-100">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-5 py-2.5 text-xs text-slate-500 hover:text-[#00174b] hover:bg-slate-50/60 transition-colors"
+      >
+        <span className="flex items-center gap-1.5 font-semibold">
+          <span className="material-symbols-outlined text-sm">cloud</span>
+          CloudWatch Logs (Live)
+        </span>
+        <span className="flex items-center gap-2">
+          {open && isLoading && <Loader2 size={12} className="animate-spin" />}
+          {!isLoading && totalErrors > 0 && (
+            <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+              {totalErrors} error{totalErrors !== 1 ? "s" : ""}
+            </span>
+          )}
+          {!isLoading && totalErrors === 0 && open && (
+            <span className="bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+              No errors
+            </span>
+          )}
+          <span className="material-symbols-outlined text-base">
+            {open ? "expand_less" : "expand_more"}
+          </span>
+        </span>
+      </button>
+
+      {open && (
+        <div className="pb-3">
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-xs text-slate-400 px-5 py-3">
+              <Loader2 size={12} className="animate-spin" /> Fetching CloudWatch logs…
+            </div>
+          ) : lambdas.length === 0 ? (
+            <p className="text-xs text-slate-400 px-5 py-3">No exceptions found in CloudWatch for this Lambda.</p>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {lambdas.map(lambda => (
+                <div key={lambda.lambdaName}>
+                  <div
+                    className="flex items-center gap-3 px-5 py-2 text-xs cursor-pointer hover:bg-red-50/50"
+                    onClick={() => toggleLambda(lambda.lambdaName)}
+                  >
+                    <span className="material-symbols-outlined text-sm text-red-500 flex-shrink-0">error</span>
+                    <span className="mono font-semibold flex-1 text-red-700">{lambda.lambdaName}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                        {lambda.errorCount}
+                      </span>
+                      <span className="material-symbols-outlined text-sm text-slate-400">
+                        {expandedLambda === lambda.lambdaName ? "expand_less" : "expand_more"}
+                      </span>
+                    </span>
+                  </div>
+
+                  {expandedLambda === lambda.lambdaName && lambda.events.length > 0 && (
+                    <div className="mx-5 mb-2 space-y-1.5">
+                      {lambda.events.map((e, i) => (
+                        <div key={i} className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-xs">
+                          <div className="flex items-center gap-3 mb-1 text-slate-500 mono">
+                            <span>{e.timestamp}</span>
+                            {e.logStream && (
+                              <span className="truncate max-w-[240px] text-slate-400" title={e.logStream}>
+                                {e.logStream}
+                              </span>
+                            )}
+                          </div>
+                          <pre className="text-red-700 whitespace-pre-wrap break-all leading-relaxed font-mono text-[11px]">
+                            {e.message}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ExceptionsPage() {
-  const [tab, setTab] = useState<TabKey>("ALL");
+  const [tab, setTab] = useState<TabKey>("SPLIT");
   const [page, setPage] = useState(0);
   const [selectedJob, setSelectedJob] = useState("");
   const user = useAuthStore(s => s.user);
   const qc = useQueryClient();
   const canResend = user?.role === "ADMIN" || user?.role === "OPS_MANAGER";
+
+  const currentTabConfig = TABS.find(t => t.key === tab) ?? TABS[0];
+  const hasDbRecords = currentTabConfig.dbType !== null;
 
   const { data: jobsRes, isLoading: loadingJobs } = useQuery({
     queryKey: ["jobs-for-exceptions"],
@@ -84,11 +198,21 @@ export default function ExceptionsPage() {
 
   const selectedJobObj = jobs.find(j => j.jobId === selectedJob);
 
-  // Server-side paginated exceptions
-  const { data: exceptionsRes, isLoading: loadingExc } = useQuery({
-    queryKey: ["exceptions", selectedJob, tab, page],
-    queryFn: () => jobsApi.exceptions(selectedJob, tab, page, 50),
+  const { data: countsRes } = useQuery({
+    queryKey: ["exception-counts", selectedJob],
+    queryFn: () => jobsApi.exceptionCounts(selectedJob),
     enabled: !!selectedJob,
+    staleTime: 10_000,
+  });
+  const pdfFailures   = countsRes?.data?.data?.pdfFailed   ?? 0;
+  const emailFailures = countsRes?.data?.data?.emailFailed  ?? 0;
+  const bounces       = countsRes?.data?.data?.bounced      ?? 0;
+  const skipped       = countsRes?.data?.data?.skipped      ?? 0;
+
+  const { data: exceptionsRes, isLoading: loadingExc } = useQuery({
+    queryKey: ["exceptions", selectedJob, currentTabConfig.dbType, page],
+    queryFn: () => jobsApi.exceptions(selectedJob, currentTabConfig.dbType!, page, 50),
+    enabled: !!selectedJob && hasDbRecords,
   });
   const excPage = exceptionsRes?.data?.data;
   const customers: JobCustomer[] = excPage?.content ?? [];
@@ -106,13 +230,7 @@ export default function ExceptionsPage() {
   });
 
   const handleTabChange = (key: TabKey) => { setTab(key); setPage(0); };
-  const handleJobChange = (jobId: string) => { setSelectedJob(jobId); setTab("ALL"); setPage(0); };
-
-  // Summary from job object
-  const pdfFailures = selectedJobObj?.failureCount ?? 0;
-  const emailFailures = selectedJobObj?.emailFailedCount ?? 0;
-  const bounces = selectedJobObj?.bounceCount ?? 0;
-  const skipped = selectedJobObj?.emailSkippedCount ?? 0;
+  const handleJobChange = (jobId: string) => { setSelectedJob(jobId); setTab("SPLIT"); setPage(0); };
 
   return (
     <div className="p-6 space-y-5 max-w-[1600px] mx-auto w-full fade-up">
@@ -164,7 +282,7 @@ export default function ExceptionsPage() {
           </div>
         )}
 
-        {/* Tabs */}
+        {/* Lambda tabs */}
         <div className="flex flex-wrap gap-1 px-5 py-2.5 border-b border-slate-100 bg-slate-50/40">
           {TABS.map(t => (
             <button key={t.key} onClick={() => handleTabChange(t.key)} className={cn("tab-btn", tab === t.key && "active")}>{t.label}</button>
@@ -173,57 +291,79 @@ export default function ExceptionsPage() {
 
         {!selectedJob ? (
           <div className="text-center text-slate-500 py-12 text-sm">Select a job to view exceptions</div>
-        ) : (loadingJobs || loadingExc) ? (
-          <div className="flex justify-center py-12"><Loader2 className="animate-spin text-[#00174b]" /></div>
-        ) : customers.length === 0 ? (
-          <div className="text-center text-slate-500 py-12 text-sm">{tab === "ALL" ? "No exceptions for this run" : `No ${TABS.find(t => t.key === tab)?.label.toLowerCase()} found`}</div>
         ) : (
-          <table className="w-full text-left">
-            <thead>
-              <tr className="t-hd">
-                <th className="px-5 py-3">Party Code</th>
-                <th className="px-5 py-3">Email</th>
-                <th className="px-5 py-3">Type</th>
-                <th className="px-5 py-3">Reason</th>
-                <th className="px-5 py-3">Bounce Category</th>
-                <th className="px-5 py-3">Time</th>
-                {canResend && <th className="px-5 py-3"></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((c, i) => (
-                <tr key={`${c.partyCode}-${i}`} className="t-row">
-                  <td className="px-5 py-3 mono text-xs font-bold text-slate-800">{normaliseCode(c.partyCode)}</td>
-                  <td className="px-5 py-3 text-xs text-slate-600 truncate max-w-[180px]">{c.email ?? "—"}</td>
-                  <td className="px-5 py-3"><span className={cn("pill", exceptionTypePill(c))}>{exceptionType(c)}</span></td>
-                  <td className="px-5 py-3 text-xs text-slate-500 max-w-[200px] truncate" title={exceptionReason(c)}>{exceptionReason(c)}</td>
-                  <td className="px-5 py-3 text-xs text-slate-500">{bounceCategory(c)}</td>
-                  <td className="px-5 py-3 text-xs text-slate-500 mono">
-                    {fmtDateTime(c.bouncedAt ?? c.emailSentAt)}
-                  </td>
-                  {canResend && (
-                    <td className="px-5 py-3">
-                      <button onClick={() => resend(normaliseCode(c.partyCode))} disabled={resending} className="text-[11px] font-bold text-[#003ea8] hover:underline flex items-center gap-1">
-                        <span className="material-symbols-outlined text-sm">forward_to_inbox</span>Resend
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+          <>
+            {/* DB records table — only for tabs that have customer-level data */}
+            {hasDbRecords && (
+              <>
+                {(loadingJobs || loadingExc) ? (
+                  <div className="flex justify-center py-12"><Loader2 className="animate-spin text-[#00174b]" /></div>
+                ) : customers.length === 0 ? (
+                  <div className="text-center text-slate-500 py-10 text-sm">
+                    No {currentTabConfig.label.toLowerCase()} exceptions for this run
+                  </div>
+                ) : (
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="t-hd">
+                        <th className="px-5 py-3">Party Code</th>
+                        <th className="px-5 py-3">Email</th>
+                        <th className="px-5 py-3">Type</th>
+                        <th className="px-5 py-3">Reason</th>
+                        <th className="px-5 py-3">Bounce Category</th>
+                        <th className="px-5 py-3">Time</th>
+                        {canResend && <th className="px-5 py-3"></th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customers.map((c, i) => (
+                        <tr key={`${c.partyCode}-${i}`} className="t-row">
+                          <td className="px-5 py-3 mono text-xs font-bold text-slate-800">{normaliseCode(c.partyCode)}</td>
+                          <td className="px-5 py-3 text-xs text-slate-600 truncate max-w-[180px]">{c.email ?? "—"}</td>
+                          <td className="px-5 py-3"><span className={cn("pill", exceptionTypePill(c))}>{exceptionType(c)}</span></td>
+                          <td className="px-5 py-3 text-xs text-slate-500 max-w-[200px] truncate" title={exceptionReason(c)}>{exceptionReason(c)}</td>
+                          <td className="px-5 py-3 text-xs text-slate-500">{bounceCategory(c)}</td>
+                          <td className="px-5 py-3 text-xs text-slate-500 mono">
+                            {fmtDateTime(c.bouncedAt ?? c.emailSentAt)}
+                          </td>
+                          {canResend && (
+                            <td className="px-5 py-3">
+                              <button onClick={() => resend(normaliseCode(c.partyCode))} disabled={resending} className="text-[11px] font-bold text-[#003ea8] hover:underline flex items-center gap-1">
+                                <span className="material-symbols-outlined text-sm">forward_to_inbox</span>Resend
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100">
-            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1.5 text-sm text-slate-600 hover:text-[#00174b] disabled:opacity-40 flex items-center gap-1">
-              <span className="material-symbols-outlined text-base">chevron_left</span>Prev
-            </button>
-            <span className="text-xs text-slate-500">Page {page + 1} of {totalPages} · {totalElements} total</span>
-            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-3 py-1.5 text-sm text-slate-600 hover:text-[#00174b] disabled:opacity-40 flex items-center gap-1">
-              Next<span className="material-symbols-outlined text-base">chevron_right</span>
-            </button>
-          </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100">
+                    <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1.5 text-sm text-slate-600 hover:text-[#00174b] disabled:opacity-40 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-base">chevron_left</span>Prev
+                    </button>
+                    <span className="text-xs text-slate-500">Page {page + 1} of {totalPages} · {totalElements} total</span>
+                    <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-3 py-1.5 text-sm text-slate-600 hover:text-[#00174b] disabled:opacity-40 flex items-center gap-1">
+                      Next<span className="material-symbols-outlined text-base">chevron_right</span>
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* No DB records notice for Lambda-only tabs */}
+            {!hasDbRecords && (
+              <div className="px-5 py-4 text-xs text-slate-400 bg-slate-50/60 border-b border-slate-100 flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm">info</span>
+                No customer-level records are tracked for the <span className="font-semibold text-slate-600">{currentTabConfig.label}</span> Lambda. See CloudWatch logs below.
+              </div>
+            )}
+
+            {/* CloudWatch logs — always shown, starts expanded */}
+            <CloudWatchSection jobId={selectedJob} tabKey={tab} />
+          </>
         )}
       </div>
     </div>

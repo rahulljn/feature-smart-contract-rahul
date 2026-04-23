@@ -69,6 +69,10 @@ export const jobsApi = {
     api.post(`/jobs/${jobId}/bulk-resend-codes`, { partyCodes, ...(templateId ? { templateId } : {}) }),
   bulkResendAllBounced: (templateId?: string) =>
     api.post("/jobs/bulk-resend-all-bounced", templateId ? { templateId } : undefined),
+  pipelineStats: (jobId: string) => api.get(`/jobs/${jobId}/pipeline-stats`),
+  exceptionCounts: (jobId: string) => api.get(`/jobs/${jobId}/exception-counts`),
+  cloudwatchExceptions: (jobId: string, type = "ALL") =>
+    api.get(`/jobs/${jobId}/cloudwatch-exceptions`, { params: { type } }),
   streamUrl: (jobId: string) => `${API_BASE}/jobs/${jobId}/stream`,
 };
 
@@ -82,6 +86,10 @@ export const pipelineApi = {
 };
 
 export const clientsApi = {
+  allCodes: () =>
+    api.get<string[]>("/clients/codes"),
+  suggest: (q: string) =>
+    api.get<string[]>("/clients/suggest", { params: { q } }),
   search: (q: string, fromDate?: string, toDate?: string, segment?: string) =>
     api.get("/clients/search", { params: { q, fromDate: fromDate || undefined, toDate: toDate || undefined, segment: segment || undefined } }),
   pdfs: (partyCode: string) => api.get(`/clients/${partyCode}/pdfs`),
@@ -97,6 +105,8 @@ export const suppressionApi = {
   list: (page = 0, size = 20) => api.get("/suppression", { params: { page, size } }),
   add: (email: string, reason?: string) => api.post("/suppression", { email, reason }),
   remove: (email: string) => api.delete(`/suppression/${encodeURIComponent(email)}`),
+  syncFromAws: () => api.post("/suppression/sync-aws"),
+  pushToAws: () => api.post("/suppression/push-aws"),
 };
 
 export const auditApi = {

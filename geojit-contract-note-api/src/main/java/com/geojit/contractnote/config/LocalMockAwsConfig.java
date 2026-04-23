@@ -14,6 +14,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.cloudwatchlogs.CloudWatchLogsClient;
+import software.amazon.awssdk.services.sesv2.SesV2Client;
 
 /**
  * Local development AWS config.
@@ -65,6 +69,24 @@ public class LocalMockAwsConfig {
         return AmazonSimpleEmailServiceClientBuilder.standard()
                 .withRegion(awsRegion)
                 .withCredentials(new DefaultAWSCredentialsProviderChain())
+                .build();
+    }
+
+    @Bean
+    public SesV2Client sesV2Client() {
+        log.info("✅  LOCAL PROFILE: Using real SesV2Client (credentials from ~/.aws/credentials)");
+        return SesV2Client.builder()
+                .region(Region.of(awsRegion))
+                .credentialsProvider(DefaultCredentialsProvider.create())
+                .build();
+    }
+
+    @Bean
+    public CloudWatchLogsClient cloudWatchLogsClient() {
+        log.info("✅  LOCAL PROFILE: Using real CloudWatchLogsClient (credentials from ~/.aws/credentials)");
+        return CloudWatchLogsClient.builder()
+                .region(Region.of(awsRegion))
+                .credentialsProvider(DefaultCredentialsProvider.create())
                 .build();
     }
 }

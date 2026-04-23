@@ -40,6 +40,28 @@ public class AppProperties {
         public static class Lambda {
             private String splitLambda;
         }
+
+        private CloudWatch cloudwatch = new CloudWatch();
+
+        @Data
+        public static class CloudWatch {
+            /** split-lambda-geojit — splits the raw file into per-customer chunks */
+            private String splitLambdaLogGroup = "/aws/lambda/split-lambda-geojit";
+            /** invoke-lambda-geojit — orchestrates PDF + email flow per chunk */
+            private String invokeLambdaLogGroup = "/aws/lambda/invoke-lambda-geojit";
+            /** create-pdf-geojit (DynamicValuePdf) — generates the contract note PDF */
+            private String pdfLambdaLogGroup = "/aws/lambda/create-pdf-geojit";
+            /** json-lambda-geojit (GetJsonLambda) — extracts JSON data for PDF rendering */
+            private String jsonLambdaLogGroup = "/aws/lambda/json-lambda-geojit";
+            /** email-notification-geojit — dispatches emails via SES */
+            private String emailLambdaLogGroup = "/aws/lambda/email-notification-geojit";
+            /** pull-bounce-geojit (PullBounceSQS) — processes SES bounce notifications */
+            private String bounceLambdaLogGroup = "/aws/lambda/pull-bounce-geojit";
+            /** pull-delivery-geojit (PullDeliverSQS) — processes SES delivery notifications */
+            private String deliveryLambdaLogGroup = "/aws/lambda/pull-delivery-geojit";
+            /** status-consumer-geojit (StatusConsumerLambda) — bridges pipeline events to API */
+            private String statusConsumerLogGroup = "/aws/lambda/status-consumer-geojit";
+        }
     }
 
     @Data

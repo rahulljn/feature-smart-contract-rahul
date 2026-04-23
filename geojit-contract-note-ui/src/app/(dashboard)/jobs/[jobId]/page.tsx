@@ -29,7 +29,7 @@ const PDF_LABEL: Record<string, string> = {
 
 const EMAIL_LABEL: Record<string, string> = {
   PENDING:   "Pending",
-  SENT:      "Dispatched",
+  SENT:      "Sent",
   DELIVERED: "Delivered",
   BOUNCED:   "Bounced",
   FAILED:    "Failed",
@@ -42,7 +42,7 @@ const EVENT_LABEL: Record<string, string> = {
   PDF_TRIGGERED:       "PDF generation started",
   PDF_GENERATED:       "Contract note PDF created",
   PDF_FAILED:          "PDF generation failed",
-  EMAIL_SENT:          "Email dispatched to client",
+  EMAIL_SENT:          "Email sent to client",
   EMAIL_FAILED:        "Email delivery failed",
   EMAIL_SKIPPED:       "Email delivery failed — no address on file",
   DELIVERY:            "Email confirmed received by client",
@@ -198,16 +198,17 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
       {activeTab === "ov" && (
         <div className="p-6 space-y-5">
 
-          {/* 6 metric cards */}
+          {/* Metric cards */}
           {(() => {
-            const total          = job.totalRecords ?? 0;
-            const pdfs           = job.pdfGeneratedCount ?? 0;
-            const sent           = job.emailSentCount ?? 0;
-            const confirmed      = job.emailDeliveredCount ?? 0;
-            const failed         = job.failureCount ?? 0;
-            const deliveryFailed = (job.bounceCount ?? 0) + (job.emailFailedCount ?? 0);
+            const total       = job.totalRecords ?? 0;
+            const pdfs        = job.pdfGeneratedCount ?? 0;
+            const sent        = job.emailSentCount ?? 0;
+            const bounced     = job.bounceCount ?? 0;
+            const confirmed   = sent - bounced; // reached client inbox
+            const emailFailed = job.emailFailedCount ?? 0;
+            const failed      = Math.max(0, total - sent - emailFailed); // records that never reached email stage
             return (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 <div className="card p-4">
                   <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Total customers</div>
                   <div className="text-[26px] font-extrabold mono text-slate-900 leading-none">{total.toLocaleString()}</div>
@@ -221,12 +222,17 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
                 <div className="card p-4">
                   <div className="text-[10px] text-emerald-600 uppercase font-bold tracking-wider mb-1">Emails sent</div>
                   <div className="text-[26px] font-extrabold mono text-emerald-600 leading-none">{sent.toLocaleString()}</div>
-                  <div className="text-[10px] text-slate-400 mt-1.5">{total > 0 ? Math.round(sent / total * 100) : 0}% · {confirmed > 0 ? `${confirmed.toLocaleString()} confirmed` : "Dispatched to SES"}</div>
+                  <div className="text-[10px] text-slate-400 mt-1.5">{total > 0 ? Math.round(sent / total * 100) : 0}% · {confirmed > 0 ? `${confirmed.toLocaleString()} delivered` : "Submitted to SES"}</div>
                 </div>
                 <div className="card p-4">
-                  <div className="text-[10px] text-orange-600 uppercase font-bold tracking-wider mb-1">Delivery failed</div>
-                  <div className="text-[26px] font-extrabold mono text-orange-600 leading-none">{deliveryFailed.toLocaleString()}</div>
-                  <div className="text-[10px] text-slate-400 mt-1.5">No address · bounce · delivery errors</div>
+                  <div className="text-[10px] text-orange-600 uppercase font-bold tracking-wider mb-1">Email failed</div>
+                  <div className="text-[26px] font-extrabold mono text-orange-600 leading-none">{emailFailed.toLocaleString()}</div>
+                  <div className="text-[10px] text-slate-400 mt-1.5">No address or send error — never reached SES</div>
+                </div>
+                <div className="card p-4">
+                  <div className="text-[10px] text-amber-600 uppercase font-bold tracking-wider mb-1">Bounced</div>
+                  <div className="text-[26px] font-extrabold mono text-amber-600 leading-none">{bounced.toLocaleString()}</div>
+                  <div className="text-[10px] text-slate-400 mt-1.5">Sent to SES · rejected by mail server</div>
                 </div>
                 <div className="card p-4">
                   <div className="text-[10px] text-rose-600 uppercase font-bold tracking-wider mb-1">Invalid records</div>
@@ -303,88 +309,52 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
 
       {/* ─── Tab 2: Pipeline ───────────────────────────────────────── */}
       {activeTab === "pipe" && (() => {
-        const hasSplit        = events.some(e => e.eventType === "JOB_REGISTERED");
-        const hasPdfTriggered = events.some(e => e.eventType === "PDF_TRIGGERED");
-        const hasPdfGenerated = events.some(e => e.eventType === "PDF_GENERATED");
-        const hasPdfFailed    = events.some(e => e.eventType === "PDF_FAILED");
-        const hasEmailSent    = events.some(e => e.eventType === "EMAIL_SENT");
-        // Use job-level counter — EMAIL_FAILED pipeline events include blank-email skips which are not real failures
-        const hasEmailFailed  = (job.emailFailedCount ?? 0) > 0;
-        const hasDelivery     = events.some(e => e.eventType === "DELIVERY");
-        const hasBounce       = events.some(e => e.eventType === "BOUNCE");
-        const dispatched      = job.pdfGeneratedCount ?? 0;
-        const isRunning     = ["PROCESSING","SPLITTING","EMAILING"].includes(job.status);
-        const isSettled     = ["COMPLETED","PARTIAL","FAILED"].includes(job.status);
-        const stepStatus    = (done: boolean, running: boolean) =>
-          done ? "done" as const : running ? "run" as const : "pend" as const;
+        const total     = job.totalRecords       ?? 0;
+        const split     = job.processedCount     ?? 0;
+        const pdfs      = job.pdfGeneratedCount  ?? 0;
+        const emailed   = job.emailSentCount     ?? 0;
+        const bounced   = job.bounceCount        ?? 0;
+        const delivered = emailed - bounced; // emails sent and not rejected = reached client inbox
+        const snsDelivered = job.emailDeliveredCount ?? 0; // SNS receipts only (subset — not all servers send these)
+        const emailFailed = job.emailFailedCount ?? 0;
+        // Derive pdfFailed from pipeline: records that never reached EMAIL_SENT stage
+        // Avoids relying on job.failureCount which can be stale from a DB race condition
+        const pdfFailed = Math.max(0, total - emailed - emailFailed);
+        const emailPending = Math.max(0, pdfs - emailed - emailFailed);
 
-        const steps = [
-          {
-            name: "File parsing",
-            status: stepStatus(hasSplit, isRunning),
-            pill: hasSplit ? "pill-ok" : isRunning ? "pill-warn" : "pill-neu",
-            pillText: hasSplit ? "Done" : isRunning ? "Running" : "Waiting",
-            desc: "File read and split into individual customer records",
-            icon: "file_open",
-          },
-          {
-            name: "Records queued",
-            status: stepStatus(hasSplit, false),
-            pill: hasSplit ? "pill-ok" : "pill-neu",
-            pillText: hasSplit ? "Done" : "Waiting",
-            desc: "All customer records accepted for processing",
-            icon: "list_alt",
-          },
-          {
-            name: "PDF generation",
-            status: stepStatus(hasPdfGenerated, isRunning && hasSplit),
-            pill: hasPdfFailed ? "pill-err" : hasPdfGenerated ? "pill-ok" : isRunning && hasSplit ? "pill-warn" : "pill-neu",
-            pillText: hasPdfFailed
-              ? `${(job.failureCount ?? 0).toLocaleString()} failed`
-              : hasPdfGenerated
-              ? `${(job.pdfGeneratedCount ?? 0).toLocaleString()} created`
-              : isRunning && hasSplit ? "Running" : "Waiting",
-            desc: "Contract note PDFs created — password-protected and digitally signed",
-            icon: "picture_as_pdf",
-          },
-          {
-            name: "Email delivery",
-            status: stepStatus(hasEmailSent, isRunning && hasPdfGenerated),
-            pill: hasEmailFailed ? "pill-err" : hasEmailSent ? "pill-ok" : isRunning && hasPdfGenerated ? "pill-warn" : "pill-neu",
-            pillText: hasEmailFailed
-              ? `${(job.emailFailedCount ?? 0).toLocaleString()} failed`
-              : hasEmailSent
-              ? `${dispatched.toLocaleString()} dispatched`
-              : isRunning && hasPdfGenerated ? "Running" : "Waiting",
-            desc: "Contract note emailed to each client with PDF attached",
-            icon: "send",
-          },
-          {
-            name: "Delivery confirmation",
-            status: stepStatus(hasDelivery || hasBounce || isSettled, isRunning && hasEmailSent),
-            pill: (hasDelivery || hasBounce) ? "pill-ok"
-              : isSettled && (job.emailDeliveredCount ?? 0) > 0 ? "pill-ok"
-              : isSettled ? "pill-ok"
-              : "pill-neu",
-            pillText: (job.emailDeliveredCount ?? 0) > 0
-              ? `${(job.emailDeliveredCount ?? 0).toLocaleString()} confirmed`
-              : isSettled
-              ? `${(job.emailSentCount ?? 0).toLocaleString()} dispatched`
-              : "Waiting",
-            desc: "Confirming delivery and recording any bounced addresses",
-            icon: "mark_email_read",
-          },
-          {
-            name: "Run complete",
-            status: stepStatus(isSettled, false),
-            pill: job.status === "COMPLETED" ? "pill-ok" : job.status === "PARTIAL" ? "pill-warn" : isSettled ? "pill-err" : "pill-neu",
-            pillText: isSettled ? (STATUS_LABEL[job.status] ?? job.status) : "Waiting",
-            desc: "All records processed and final status recorded",
-            icon: "task_alt",
-          },
+        const isRunning = ["PROCESSING","SPLITTING","EMAILING"].includes(job.status);
+
+        type NS = "idle" | "active" | "done";
+        const st = (n: string): NS => {
+          if (n === "upload")    return total > 0     ? "done" : "idle";
+          if (n === "split")     return split > 0     ? "done" : job.status === "SPLITTING"  ? "active" : "idle";
+          if (n === "pdf")       return pdfs > 0      ? "done" : job.status === "PROCESSING" ? "active" : "idle";
+          if (n === "email")     return emailed > 0   ? "done" : job.status === "EMAILING"   ? "active" : "idle";
+          if (n === "delivered") return delivered > 0 ? "done" : isRunning && emailed > 0    ? "active" : "idle";
+          return "idle";
+        };
+
+        const pipeNodes = [
+          { key: "upload",    label: "Upload",    icon: "upload_file",      count: total,     st: st("upload"),    color: "#64748b" },
+          { key: "split",     label: "Split",     icon: "call_split",       count: split,     st: st("split"),     color: "#a855f7" },
+          { key: "pdf",       label: "PDF gen",   icon: "picture_as_pdf",   count: pdfs,      st: st("pdf"),       color: "#8b5cf6" },
+          { key: "email",     label: "Email",     icon: "forward_to_inbox", count: emailed,   st: st("email"),     color: "#003ea8" },
+          { key: "delivered", label: "Delivered", icon: "mark_email_read",  count: delivered, st: st("delivered"), color: "#10b981" },
         ];
 
+        const fmtN = (n: number) => n >= 1000 ? (n/1000).toFixed(1).replace(/\.0$/,"")+"k" : n.toLocaleString();
+
         const allEvents = [...liveEvents, ...events];
+
+        const NX = [70, 238, 406, 574, 742];
+        const NY = 140;
+        const NR = 40;
+
+        const resolveColor = (base: string, s: NS) => s === "idle" ? "#cbd5e1" : base;
+        const connStroke = (i: number, l: NS, r: NS) => {
+          const base = pipeNodes[i + 1].color;
+          return (l === "idle" && r === "idle") ? null : resolveColor(base, r === "idle" ? l : r);
+        };
 
         return (
           <div className="p-6 space-y-4">
@@ -395,29 +365,86 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
               </div>
             )}
 
-            {/* Pipeline steps */}
-            <div className="card p-5 space-y-4">
-              {steps.map((step, i) => (
-                <div key={i} className={cn("pstep", step.status === "done" && "pstep-done", step.status === "run" && "pstep-run", step.status === "pend" && "pstep-pend")}>
-                  <div className={cn(
-                    "pstep-ico",
-                    step.status === "done" ? "bg-emerald-100 text-emerald-700"
-                    : step.status === "run" ? "bg-amber-100 text-amber-700"
-                    : "bg-slate-100 text-slate-400"
-                  )}>
-                    <span className="material-symbols-outlined text-lg">
-                      {step.status === "run" ? "bolt" : step.status === "done" ? "check_circle" : step.icon}
-                    </span>
+            {/* ── Pipeline diagram ── */}
+            <div className="card p-6 overflow-x-auto">
+              <style>{`
+                @keyframes flowDash { to { stroke-dashoffset: -40; } }
+                .flow-line { stroke-dasharray: 6 6; animation: flowDash 1.6s linear infinite; }
+              `}</style>
+              <svg viewBox="0 0 840 290" width="100%" style={{ minWidth: 520, display: "block" }}>
+
+                {/* Trunk lines */}
+                {pipeNodes.map((n, i) => {
+                  if (i === pipeNodes.length - 1) return null;
+                  const x1 = NX[i] + NR, x2 = NX[i + 1] - NR;
+                  const col = connStroke(i, n.st, pipeNodes[i + 1].st);
+                  return (
+                    <g key={`trunk-${i}`}>
+                      <line x1={x1} y1={NY} x2={x2} y2={NY} stroke="#e2e8f0" strokeWidth="10" strokeLinecap="round" />
+                      {col ? (
+                        <line x1={x1} y1={NY} x2={x2} y2={NY} stroke={col} strokeWidth="2.5" className="flow-line" opacity="0.9" />
+                      ) : (
+                        <line x1={x1} y1={NY} x2={x2} y2={NY} stroke="#e2e8f0" strokeWidth="2" strokeDasharray="5 5" />
+                      )}
+                    </g>
+                  );
+                })}
+
+                {/* Failed branch — from PDF (NX[2]=406) curved up-right */}
+                <path d={`M 406 ${NY - NR} Q 406 65 506 65`} fill="none" stroke="#f87171" strokeWidth="1.5" strokeDasharray="4 4" />
+                <foreignObject x="510" y="48" width="120" height="26">
+                  <div style={{ display:"flex", alignItems:"center", gap:3, padding:"2px 8px", borderRadius:999, fontSize:11, fontWeight:700, background:"#fff1f2", border:"1px solid #fecaca", color:"#dc2626", whiteSpace:"nowrap" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize:11 }}>cancel</span>
+                    Failed <span style={{ fontWeight:800, marginLeft:2 }}>{fmtN(pdfFailed)}</span>
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="font-bold text-sm text-slate-900">{step.name}</div>
-                      <span className={cn("pill flex-shrink-0", step.pill)}>{step.pillText}</span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 mt-0.5">{step.desc}</div>
+                </foreignObject>
+
+                {/* Pending branch — from Email (NX[3]=574) curved up-right */}
+                <path d={`M 574 ${NY - NR} Q 574 65 674 65`} fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4 4" />
+                <foreignObject x="678" y="48" width="126" height="26">
+                  <div style={{ display:"flex", alignItems:"center", gap:3, padding:"2px 8px", borderRadius:999, fontSize:11, fontWeight:700, background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", whiteSpace:"nowrap" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize:11 }}>hourglass_empty</span>
+                    Pending <span style={{ fontWeight:800, marginLeft:2 }}>{fmtN(emailPending)}</span>
                   </div>
-                </div>
-              ))}
+                </foreignObject>
+
+                {/* Bounced branch — from Email (NX[3]=574) curved down */}
+                <path d={`M 574 ${NY + NR} Q 574 252 638 248`} fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeDasharray="4 4" />
+                <foreignObject x="560" y="235" width="130" height="26">
+                  <div style={{ display:"flex", alignItems:"center", gap:3, padding:"2px 8px", borderRadius:999, fontSize:11, fontWeight:700, background:"#fffbeb", border:"1px solid #fde68a", color:"#d97706", whiteSpace:"nowrap" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize:11 }}>mail_lock</span>
+                    Bounced <span style={{ fontWeight:800, marginLeft:2 }}>{fmtN(bounced)}</span>
+                  </div>
+                </foreignObject>
+
+                {/* Node circles */}
+                {pipeNodes.map((n, i) => {
+                  const c = resolveColor(n.color, n.st);
+                  const countTxt = n.count > 0 ? fmtN(n.count) : "—";
+                  return (
+                    <g key={n.key} transform={`translate(${NX[i]}, ${NY})`}>
+                      <circle r={NR} fill="#ffffff" stroke={c} strokeWidth="2.5" />
+                      <circle r={NR} fill={c} opacity="0.08" />
+                      <foreignObject x="-13" y="-13" width="26" height="26">
+                        <span className="material-symbols-outlined" style={{ fontSize: 21, color: c, display:"block", textAlign:"center", lineHeight:"26px" }}>{n.icon}</span>
+                      </foreignObject>
+                      <text y="58" textAnchor="middle" fontSize="11" fontWeight="700" fill="#475569">{n.label}</text>
+                      <text y="76" textAnchor="middle" fontSize="17" fontWeight="800" fill={n.st === "idle" ? "#94a3b8" : "#0f172a"} fontFamily="ui-monospace,monospace">{countTxt}</text>
+                    </g>
+                  );
+                })}
+              </svg>
+
+              {/* Bottom stats */}
+              <div className="flex items-center justify-center flex-wrap gap-5 mt-4 px-4 py-3 bg-slate-50 rounded-xl text-[12px] text-slate-500">
+                <div>Error rate: <span className={cn("font-bold", pdfFailed + emailFailed > 0 ? "text-rose-600" : "text-emerald-600")}>
+                  {total > 0 ? ((pdfFailed + emailFailed) / total * 100).toFixed(2) : "0.00"}%
+                </span></div>
+                <span className="text-slate-300">·</span>
+                <div>Bounced: <span className="font-bold text-amber-600">{bounced.toLocaleString()}</span></div>
+                <span className="text-slate-300">·</span>
+                <div>Delivered: <span className="font-bold text-emerald-600">{delivered.toLocaleString()}</span>{snsDelivered > 0 && <span className="text-slate-400 text-[10px] ml-1">({snsDelivered} server confirmed)</span>}</div>
+              </div>
             </div>
 
             {/* Event log */}

@@ -4,17 +4,14 @@ import com.amazonaws.services.simpleemail.AmazonSimpleEmailService;
 import com.amazonaws.services.simpleemail.model.*;
 import com.geojit.contractnote.dto.response.SesStatisticsResponse;
 import com.geojit.contractnote.dto.response.SesStatisticsResponse.SesDataPoint;
-import com.geojit.contractnote.repository.JobCustomerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 
 @Slf4j
@@ -23,9 +20,8 @@ import java.util.List;
 public class SesStatisticsService {
 
     private final AmazonSimpleEmailService sesClient;
-    private final JobCustomerRepository jobCustomerRepository;
 
-    private static final DateTimeFormatter LABEL_FMT = DateTimeFormatter.ofPattern("MMM d");
+    private static final DateTimeFormatter LABEL_FMT = DateTimeFormatter.ofPattern("MMM d HH:mm");
 
     public SesStatisticsResponse getStatistics(LocalDate startDate, LocalDate endDate) {
         try {
@@ -33,12 +29,10 @@ public class SesStatisticsService {
             long max24h      = quota.getMax24HourSend().longValue();
             double maxPerSec = quota.getMaxSendRate();
 
-            // Use our own DB records for accuracy — AWS quota counter may reflect
-            // a different IAM identity than the Lambda that actually sends emails.
-            long sent24h = jobCustomerRepository.countEmailsSentSince(
-                    LocalDateTime.now(ZoneOffset.UTC).minusHours(24));
+            long sent24h = quota.getSentLast24Hours().longValue();
 
             GetSendStatisticsResult stats = sesClient.getSendStatistics(new GetSendStatisticsRequest());
+
             List<SendDataPoint> allPoints = stats.getSendDataPoints();
 
             // Filter to requested date range and sort chronologically
@@ -52,7 +46,7 @@ public class SesStatisticsService {
                     .sorted(Comparator.comparing(SendDataPoint::getTimestamp))
                     .toList();
 
-            // Aggregate full-range totals for rates (use all points for accuracy)
+            // Rates use full account history (all available points) to match AWS account health calculation
             long totalSent       = allPoints.stream().mapToLong(SendDataPoint::getDeliveryAttempts).sum();
             long totalBounced    = allPoints.stream().mapToLong(SendDataPoint::getBounces).sum();
             long totalComplaints = allPoints.stream().mapToLong(SendDataPoint::getComplaints).sum();
@@ -65,25 +59,14 @@ public class SesStatisticsService {
             double quotaUsedPercent = max24h > 0
                     ? Math.round((double) sent24h / max24h * 10000.0) / 100.0 : 0;
 
-            // Aggregate 15-min AWS intervals into one total per calendar day
-            LinkedHashMap<LocalDate, long[]> byDay = new LinkedHashMap<>();
-            for (SendDataPoint dp : filtered) {
-                LocalDate day = dp.getTimestamp().toInstant()
-                        .atZone(ZoneOffset.UTC).toLocalDate();
-                long[] totals = byDay.computeIfAbsent(day, k -> new long[4]);
-                totals[0] += dp.getDeliveryAttempts();
-                totals[1] += dp.getBounces();
-                totals[2] += dp.getComplaints();
-                totals[3] += dp.getRejects();
-            }
-
-            List<SesDataPoint> dataPoints = byDay.entrySet().stream()
-                    .map(e -> new SesDataPoint(
-                            e.getKey().format(LABEL_FMT),
-                            e.getValue()[0],
-                            e.getValue()[1],
-                            e.getValue()[2],
-                            e.getValue()[3]
+            // Return raw 15-minute interval data points (same granularity as AWS console)
+            List<SesDataPoint> dataPoints = filtered.stream()
+                    .map(dp -> new SesDataPoint(
+                            dp.getTimestamp().toInstant().atZone(ZoneOffset.UTC).format(LABEL_FMT),
+                            dp.getDeliveryAttempts(),
+                            dp.getBounces(),
+                            dp.getComplaints(),
+                            dp.getRejects()
                     ))
                     .toList();
 

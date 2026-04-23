@@ -145,36 +145,6 @@ export function Header() {
     <header className="h-14 flex-shrink-0 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 flex items-center justify-between px-5 z-40">
       <div className="flex items-center gap-3">
         <div className="text-base font-bold text-slate-800 headline">{title}</div>
-
-        {/* Live pipeline status */}
-        {metrics && (
-          <div className={cn(
-            "hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold",
-            metrics.activeJobs > 0
-              ? "bg-blue-50 border border-blue-100 text-blue-700"
-              : metrics.failedJobs > 0
-              ? "bg-rose-50 border border-rose-100 text-rose-700"
-              : "bg-emerald-50 border border-emerald-100 text-emerald-700"
-          )}>
-            <span className={cn(
-              "w-1.5 h-1.5 rounded-full inline-block",
-              metrics.activeJobs > 0 ? "bg-blue-500 animate-pulse" : metrics.failedJobs > 0 ? "bg-rose-500" : "bg-emerald-500"
-            )} />
-            {metrics.activeJobs > 0
-              ? `${metrics.activeJobs} job${metrics.activeJobs > 1 ? "s" : ""} running`
-              : metrics.failedJobs > 0
-              ? `${metrics.failedJobs} failure${metrics.failedJobs > 1 ? "s" : ""} today`
-              : "Pipeline healthy"}
-          </div>
-        )}
-
-        {/* Delivered today */}
-        {metrics && metrics.totalDelivered > 0 && (
-          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-slate-100 rounded-full text-[11px] font-medium text-slate-600">
-            <span className="material-symbols-outlined text-sm">mark_email_read</span>
-            {metrics.totalDelivered.toLocaleString()} delivered today
-          </div>
-        )}
       </div>
 
       <div className="flex items-center gap-1.5">

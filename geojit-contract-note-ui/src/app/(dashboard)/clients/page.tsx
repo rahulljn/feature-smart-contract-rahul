@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { clientsApi } from "@/lib/api";
 import type { JobCustomer } from "@/types";
@@ -19,12 +19,30 @@ export default function ClientsPage() {
   const [toDate, setToDate] = useState("");
   const [segment, setSegment] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const comboRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["client-search", query, fromDate, toDate, segment],
     queryFn: () => clientsApi.search(query, fromDate || undefined, toDate || undefined, segment || undefined),
     enabled: query.trim().length >= 2,
   });
+
+  const { data: allCodesData } = useQuery({
+    queryKey: ["client-codes"],
+    queryFn: () => clientsApi.allCodes(),
+    staleTime: 5 * 60_000,
+  });
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (comboRef.current && !comboRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    if (showDropdown) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showDropdown]);
 
   // API returns { partyCode, clientDetails, processHistory, totalContracts }
   const _raw = data?.data?.data;
@@ -39,6 +57,17 @@ export default function ClientsPage() {
     return acc;
   }, {});
   const clients = Object.values(grouped);
+
+  const allCodes: string[] = useMemo(() => {
+    const raw = allCodesData?.data?.data;
+    return Array.isArray(raw) ? raw : [];
+  }, [allCodesData]);
+
+  const suggestions: string[] = useMemo(() => {
+    if (!search.trim()) return allCodes.slice(0, 10);
+    const lower = search.toLowerCase();
+    return allCodes.filter(c => c.toLowerCase().includes(lower)).slice(0, 10);
+  }, [search, allCodes]);
 
   const handleSearch = () => {
     if (search.trim().length < 2) { toast.warning("Enter at least 2 characters"); return; }
@@ -87,17 +116,33 @@ export default function ClientsPage() {
         <div className="card p-5 space-y-4">
           <div>
             <div className="flex gap-2 mb-3">
-              <div className="relative flex-1">
+              <div ref={comboRef} className="relative flex-1">
                 <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
                 <input
                   value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleSearch()}
+                  onChange={e => { setSearch(e.target.value); setShowDropdown(true); }}
+                  onKeyDown={e => { if (e.key === "Enter") { setShowDropdown(false); handleSearch(); } if (e.key === "Escape") setShowDropdown(false); }}
+                  onFocus={() => setShowDropdown(true)}
                   className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#497cff]/30"
-                  placeholder="Client code only…"
+                  placeholder="Type or select a client code…"
+                  autoComplete="off"
                 />
+                {showDropdown && suggestions.length > 0 && (
+                  <ul className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 overflow-hidden">
+                    {suggestions.map(code => (
+                      <li
+                        key={code}
+                        onMouseDown={() => { setSearch(code); setQuery(code); setShowDropdown(false); setRecentSearches(prev => [code, ...prev.filter(s => s !== code)].slice(0, 4)); }}
+                        className="px-4 py-2.5 text-sm mono text-slate-700 hover:bg-blue-50 hover:text-[#003ea8] cursor-pointer flex items-center gap-2"
+                      >
+                        <span className="material-symbols-outlined text-slate-400 text-base">person</span>
+                        {code}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              <button onClick={handleSearch} className="px-5 py-3 bg-[#00174b] text-white rounded-xl text-sm font-bold hover:bg-[#003ea8] flex items-center gap-2 flex-shrink-0">
+              <button onClick={() => { setShowDropdown(false); handleSearch(); }} className="px-5 py-3 bg-[#00174b] text-white rounded-xl text-sm font-bold hover:bg-[#003ea8] flex items-center gap-2 flex-shrink-0">
                 <span className="material-symbols-outlined text-base">search</span>Search
               </button>
             </div>
@@ -113,12 +158,15 @@ export default function ClientsPage() {
 
           {/* Optional filters — all wired to backend JPQL query */}
           <div className="border-t border-slate-100 pt-4 grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+            <div className="col-span-2 text-[10px] text-slate-400 -mb-1">
+              Date range filters by job processing date (not trade date)
+            </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">From date</label>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Job Date From</label>
               <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">To date</label>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Job Date To</label>
               <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
             </div>
             <div>

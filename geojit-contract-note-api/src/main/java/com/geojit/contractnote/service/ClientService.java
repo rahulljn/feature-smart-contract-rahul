@@ -11,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.data.domain.PageRequest;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -73,6 +75,29 @@ public class ClientService {
                 "processHistory", history,
                 "totalContracts", history.size()
         );
+    }
+
+    /** All distinct normalised party codes — loaded once for the client code dropdown. */
+    @Transactional(readOnly = true)
+    public List<String> getAllPartyCodes() {
+        return jobCustomerRepository.findAllDistinctPartyCodes().stream()
+                .map(code -> code.contains("/") ? code.split("/")[0] : code)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+    }
+
+    /** Autocomplete: returns up to 8 distinct normalised party codes matching the given prefix. */
+    @Transactional(readOnly = true)
+    public List<String> suggestPartyCodes(String prefix) {
+        String normalized = prefix != null && prefix.contains("/") ? prefix.split("/")[0] : prefix;
+        List<String> raw = jobCustomerRepository.findDistinctPartyCodesByPrefix(
+                normalized, PageRequest.of(0, 20));
+        return raw.stream()
+                .map(code -> code.contains("/") ? code.split("/")[0] : code)
+                .distinct()
+                .limit(8)
+                .collect(Collectors.toList());
     }
 
     /** List all PDFs for a partyCode from S3 */

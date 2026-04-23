@@ -187,12 +187,39 @@
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.5; }
 }
+@keyframes pulseDot {
+  0%, 100% { opacity: .4; transform: scale(1); }
+  50%      { opacity: 1;  transform: scale(1.15); }
+}
 @keyframes toastIn {
   from { opacity: 0; transform: translate(-50%, 18px); }
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
+@keyframes dashFlow {
+  to { background-position: 20px 0; }
+}
+@keyframes ringPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(73,124,255,0.4); }
+  50%       { box-shadow: 0 0 0 8px rgba(73,124,255,0); }
+}
 .fade-up { animation: fadeUp 0.3s ease both; }
 .pulse   { animation: pulseAnim 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+/* ── Pipeline animated connectors ──────────────────────────────── */
+.pipe-done {
+  height: 2px;
+  background-image: repeating-linear-gradient(90deg, #10b981 0, #10b981 6px, transparent 6px, transparent 14px);
+  background-size: 20px 2px;
+  animation: dashFlow 0.5s linear infinite;
+}
+.pipe-active {
+  height: 2px;
+  background-image: repeating-linear-gradient(90deg, #497cff 0, #497cff 6px, transparent 6px, transparent 14px);
+  background-size: 20px 2px;
+  animation: dashFlow 0.4s linear infinite;
+}
+.ring-active { animation: ringPulse 1.8s ease-in-out infinite; }
+
 
 /* ── Login gradient ────────────────────────────────────────────── */
 .login-grad {

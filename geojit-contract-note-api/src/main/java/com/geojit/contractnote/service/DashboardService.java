@@ -43,14 +43,13 @@ public class DashboardService {
 
         long totalPdfsGenerated = jobsInRange.stream().mapToLong(Job::getPdfGeneratedCount).sum();
         long totalEmailsSent    = jobsInRange.stream().mapToLong(Job::getEmailSentCount).sum();
-        long totalConfirmed     = jobsInRange.stream().mapToLong(Job::getEmailDeliveredCount).sum(); // SNS-backed delivery receipts
-        long totalDelivered     = totalEmailsSent; // primary "delivered" = sent (accepted by SES)
+        long totalDelivered     = jobsInRange.stream().mapToLong(Job::getEmailDeliveredCount).sum(); // SNS-backed delivery receipts
         long totalBounced       = jobsInRange.stream().mapToLong(Job::getEmailBouncedCount).sum();
         long totalFailed        = jobsInRange.stream().mapToLong(Job::getFailedCount).sum();
 
         long emailTotal = totalEmailsSent + totalBounced;
-        double bounceRate   = emailTotal > 0 ? Math.round((double) totalBounced    / emailTotal * 10000.0) / 100.0 : 0;
-        double deliveryRate = emailTotal > 0 ? Math.round((double) totalEmailsSent / emailTotal * 10000.0) / 100.0 : 0;
+        double bounceRate   = emailTotal > 0 ? Math.round((double) totalBounced  / emailTotal    * 10000.0) / 100.0 : 0;
+        double deliveryRate = totalEmailsSent > 0 ? Math.round((double) totalDelivered / totalEmailsSent * 10000.0) / 100.0 : 0;
 
         // Hourly activity — events grouped by hour for the date range
         List<HourlyActivity> hourlyActivity = buildHourlyActivity(startDateTime, endDateTime);
@@ -63,7 +62,6 @@ public class DashboardService {
                 .totalPdfsGenerated(totalPdfsGenerated)
                 .totalEmailsSent(totalEmailsSent)
                 .totalDelivered(totalDelivered)
-                .totalConfirmed(totalConfirmed)
                 .totalBounced(totalBounced)
                 .bounceRate(bounceRate)
                 .deliveryRate(deliveryRate)
@@ -129,10 +127,10 @@ public class DashboardService {
             case CUSTOMER_REGISTERED  -> "Customer " + code + " registered";
             case PDF_GENERATED        -> "PDF generated for " + code;
             case PDF_FAILED           -> "PDF failed for " + code;
-            case EMAIL_SENT           -> "Email dispatched for " + code;
+            case EMAIL_SENT           -> "Email sent for " + code;
             case EMAIL_FAILED         -> "Email failed for " + code;
             case EMAIL_SKIPPED        -> "Email delivery failed — no address for " + code;
-            case DELIVERY             -> "Email sent to " + code;
+            case DELIVERY             -> "Email delivered to " + code;
             case BOUNCE               -> "Email bounced for " + code;
             case COMPLAINT            -> "Complaint from " + code;
             case RESEND_TRIGGERED     -> "Resend triggered for " + code;

@@ -56,6 +56,29 @@ export interface Job {
   templateId?: string;
 }
 
+// ─── Pipeline Stats ───────────────────────────────────────────────────
+export interface PipelineStats {
+  jobId: string;
+  fileName: string;
+  status: string;
+  uploadCount: number;
+  splitCount: number;
+  pdfCount: number;
+  pdfFailed: number;
+  pdfPending: number;
+  pdfRate: number;
+  emailCount: number;
+  emailBounced: number;
+  emailFailed: number;
+  emailPending: number;
+  emailRate: number;
+  deliveredCount: number;
+  deliveredRate: number;
+  medianSeconds: number;
+  p95Seconds: number;
+  errorRate: number;
+}
+
 export interface JobCustomer {
   id: number;
   partyCode: string;
@@ -84,7 +107,6 @@ export interface DashboardMetrics {
   totalPdfsGenerated: number;
   totalEmailsSent: number;
   totalDelivered: number;
-  totalConfirmed: number;
   totalBounced: number;
   bounceRate: number;
   deliveryRate: number;
@@ -248,6 +270,29 @@ export interface ClientProfile {
   clientDetails: Record<string, string>;
   processHistory: JobCustomer[];
   totalContracts: number;
+}
+
+// ─── Exception Counts ─────────────────────────────────────────────────
+export interface ExceptionCounts {
+  pdfFailed: number;
+  emailFailed: number;
+  bounced: number;
+  skipped: number;
+}
+
+// ─── CloudWatch Exception ─────────────────────────────────────────────
+export interface CloudWatchException {
+  timestamp: string;
+  logGroup: string;
+  logStream: string;
+  message: string;
+}
+
+export interface CloudWatchLambda {
+  lambdaName: string;
+  logGroup: string;
+  errorCount: number;
+  events: CloudWatchException[];
 }
 
 // ─── Validation ───────────────────────────────────────────────────────

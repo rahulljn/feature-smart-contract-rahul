@@ -30,6 +30,14 @@ public interface JobCustomerRepository extends JpaRepository<JobCustomer, Long> 
     @Query("SELECT jc FROM JobCustomer jc WHERE jc.partyCode = :partyCode OR jc.partyCode LIKE CONCAT(:partyCode, '/%') ORDER BY jc.createdAt DESC")
     List<JobCustomer> findAllByPartyCode(String partyCode);
 
+    /** Autocomplete: distinct party codes that start with the given prefix (case-insensitive). */
+    @Query("SELECT DISTINCT jc.partyCode FROM JobCustomer jc WHERE LOWER(jc.partyCode) LIKE LOWER(CONCAT(:prefix, '%')) ORDER BY jc.partyCode ASC")
+    List<String> findDistinctPartyCodesByPrefix(@Param("prefix") String prefix, Pageable pageable);
+
+    /** All distinct party codes — used to populate the client code dropdown on page load. */
+    @Query("SELECT DISTINCT jc.partyCode FROM JobCustomer jc ORDER BY jc.partyCode ASC")
+    List<String> findAllDistinctPartyCodes();
+
     /**
      * Filtered history for a partyCode — date range and segment are optional.
      * fromDate/toDate filter on createdAt (when the job was processed).
@@ -93,6 +101,18 @@ public interface JobCustomerRepository extends JpaRepository<JobCustomer, Long> 
     /** Count emails actually dispatched in the last 24 hours (from our own records) */
     @Query("SELECT COUNT(jc) FROM JobCustomer jc WHERE jc.emailSentAt >= :since AND jc.emailStatus IN ('SENT','DELIVERED','BOUNCED')")
     long countEmailsSentSince(@Param("since") LocalDateTime since);
+
+    /** p50 and p95 end-to-end latency (customer created → email sent) in seconds */
+    @Query(value = """
+            SELECT
+              COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (
+                ORDER BY EXTRACT(EPOCH FROM (email_sent_at - created_at))), 0) AS median_sec,
+              COALESCE(PERCENTILE_CONT(0.95) WITHIN GROUP (
+                ORDER BY EXTRACT(EPOCH FROM (email_sent_at - created_at))), 0) AS p95_sec
+            FROM job_customers
+            WHERE job_id = :jobId AND email_sent_at IS NOT NULL
+            """, nativeQuery = true)
+    Object[] calculateLatencyPercentiles(@Param("jobId") UUID jobId);
 
     /** All customers for a specific job matching any of the given party codes */
     @Query("SELECT jc FROM JobCustomer jc WHERE jc.job.jobId = :jobId AND jc.partyCode IN :partyCodes")

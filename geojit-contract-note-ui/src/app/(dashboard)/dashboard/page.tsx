@@ -151,7 +151,7 @@ export default function DashboardPage() {
             iconBg="bg-emerald-50"
             iconColor="text-emerald-600"
             badge={{ label: `${metrics?.deliveryRate ?? 0}%`, ok: true }}
-            sub={(metrics?.totalConfirmed ?? 0) > 0 ? `${metrics?.totalConfirmed} confirmed by mail server` : "Dispatched to SES"}
+            sub={(() => { const d = (metrics?.totalEmailsSent ?? 0) - (metrics?.totalBounced ?? 0); return d > 0 ? `${d} reached client inbox` : "Submitted to SES"; })()}
           />
           <MetricCard
             title="Records failed"
@@ -197,8 +197,9 @@ export default function DashboardPage() {
             const total     = metrics.totalCustomersInPipeline;
             const pdfs      = metrics.totalPdfsGenerated;
             const sent      = metrics.totalEmailsSent;
-            const confirmed = metrics.totalConfirmed ?? 0;
             const bounced   = metrics.totalBounced;
+            const confirmed = sent - bounced; // emails sent and not rejected = reached client inbox
+            const snsConfirmed = metrics.totalDelivered ?? 0; // SNS delivery receipts (partial — not all servers send these)
             const failed   = metrics.failedJobs;
             return (
               <div className="space-y-1">
@@ -219,9 +220,9 @@ export default function DashboardPage() {
                 {/* Delivery outcomes — indent */}
                 <div className="ml-6 border-l-2 border-slate-200 pl-4 pt-1 pb-1 space-y-1">
 
-                  <FunnelRow icon="mark_email_read" label="Confirmed received" value={confirmed} total={total}
+                  <FunnelRow icon="mark_email_read" label="Delivered" value={confirmed} total={total}
                     color="bg-emerald-500"
-                    note={confirmed > 0 ? `Delivery confirmed by mail server · ${sent > 0 ? ((confirmed/sent)*100).toFixed(1) : 0}% of sent` : "Delivery receipts via SNS — 0 received yet"} />
+                    note={confirmed > 0 ? `Emails sent and not bounced · ${snsConfirmed > 0 ? `${snsConfirmed} confirmed by server` : "server receipts pending"}` : "No emails delivered yet"} />
 
                   <div className="flex items-center gap-2 py-1.5 px-3 bg-amber-50 border border-amber-100 rounded-xl">
                     <span className="material-symbols-outlined text-amber-500 text-[16px]">unsubscribe</span>

@@ -21,6 +21,18 @@ public class ClientController {
 
     private final ClientService clientService;
 
+    @GetMapping("/codes")
+    @Operation(summary = "All distinct party codes — used to populate the client code dropdown.")
+    public ResponseEntity<ApiResponse<List<String>>> allCodes() {
+        return ResponseEntity.ok(ApiResponse.ok(clientService.getAllPartyCodes()));
+    }
+
+    @GetMapping("/suggest")
+    @Operation(summary = "Autocomplete party codes — returns up to 8 codes matching the given prefix.")
+    public ResponseEntity<ApiResponse<List<String>>> suggest(@RequestParam("q") String prefix) {
+        return ResponseEntity.ok(ApiResponse.ok(clientService.suggestPartyCodes(prefix)));
+    }
+
     @GetMapping("/search")
     @Operation(summary = "Search client by partyCode (queries DB + S3 metadata). Optional filters: fromDate, toDate, segment.")
     public ResponseEntity<ApiResponse<Map<String, Object>>> search(
