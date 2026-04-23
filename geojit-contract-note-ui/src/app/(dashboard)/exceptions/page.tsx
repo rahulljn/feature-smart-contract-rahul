@@ -239,12 +239,6 @@ export default function ExceptionsPage() {
           <h2 className="text-2xl font-extrabold text-slate-900 headline">Exceptions</h2>
           <p className="text-slate-500 text-sm mt-1">Records where PDF generation or email delivery failed. Select a run to view details and retry.</p>
         </div>
-        {canResend && selectedJob && (
-          <button onClick={() => bulkResend()} disabled={bulkResending} className="px-4 py-2 bg-[#00174b] text-white rounded-xl text-sm font-bold hover:bg-[#003ea8] flex items-center gap-1.5 disabled:opacity-50">
-            {bulkResending ? <Loader2 size={14} className="animate-spin" /> : <span className="material-symbols-outlined text-base">forward_to_inbox</span>}
-            Resend all failed
-          </button>
-        )}
       </div>
 
       {/* Summary cards */}
