@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -44,8 +46,16 @@ public class JwtTokenProvider {
             this.publicKey  = loadPublicKey(publicKeyResource);
             log.info("JWT RSA keys loaded successfully");
         } catch (Exception e) {
-            log.error("Failed to load JWT RSA keys: {}", e.getMessage(), e);
-            throw new RuntimeException("JWT key initialization failed", e);
+            log.warn("JWT key files not found — generating in-memory RSA keypair for local dev. Tokens will reset on restart.");
+            try {
+                KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+                kpg.initialize(2048);
+                KeyPair kp = kpg.generateKeyPair();
+                this.privateKey = kp.getPrivate();
+                this.publicKey  = kp.getPublic();
+            } catch (Exception ex) {
+                throw new RuntimeException("JWT key initialization failed", ex);
+            }
         }
     }
 
