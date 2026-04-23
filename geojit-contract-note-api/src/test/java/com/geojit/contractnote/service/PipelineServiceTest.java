@@ -2,6 +2,7 @@ package com.geojit.contractnote.service;
 
 import com.geojit.contractnote.entity.*;
 import com.geojit.contractnote.repository.*;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,9 +18,11 @@ import static org.mockito.BDDMockito.*;
 @ExtendWith(MockitoExtension.class)
 class PipelineServiceTest {
 
-    @Mock PipelineEventRepository  pipelineEventRepository;
-    @Mock JobCustomerRepository    jobCustomerRepository;
-    @Mock JobRepository            jobRepository;
+    @Mock PipelineEventRepository   pipelineEventRepository;
+    @Mock JobCustomerRepository     jobCustomerRepository;
+    @Mock JobRepository             jobRepository;
+    @Mock EmailEventRepository      emailEventRepository;
+    @Mock ApplicationEventPublisher eventPublisher;
 
     @InjectMocks PipelineService pipelineService;
 
