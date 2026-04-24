@@ -167,7 +167,7 @@ export default function DashboardPage() {
             icon="error"
             iconBg="bg-rose-50"
             iconColor="text-rose-600"
-            sub="Records rejected in Split or Invoke — never entered pipeline"
+            sub="Records rejected due to validation issue"
             subErr={!!metrics?.totalFailedRecords}
           />
           <MetricCard

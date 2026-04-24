@@ -233,16 +233,17 @@ export default function ResendPage() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="fade-up">
-      {/* Sticky header */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-10">
+    <>
+      {/* Sticky header — OUTSIDE fade-up to prevent stacking context issues */}
+      <div className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-[9999]">
         <div className="max-w-[1600px] mx-auto">
           <h2 className="text-xl font-extrabold text-slate-900 headline">Resend</h2>
           <p className="text-slate-500 text-[12px] mt-0.5">Re-send contract note emails in bulk for failed, bounced, or specific clients.</p>
         </div>
       </div>
 
-      <div className="p-6 max-w-[1600px] mx-auto w-full space-y-5">
+      <div className="fade-up">
+        <div className="p-6 max-w-[1600px] mx-auto w-full space-y-5">
 
         {/* Bulk configuration */}
         <div className="card p-6 space-y-5">
@@ -305,8 +306,8 @@ export default function ResendPage() {
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Template override <span className="text-slate-400 font-normal">(optional)</span></label>
               <select value={bulkTemplateId} onChange={e => setBulkTemplateId(e.target.value)} className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium">
                 <option value="">Use job&apos;s original template</option>
-                {templates.map(t => (
-                  <option key={t.templateId} value={t.templateId}>{t.name}{t.isActive ? " (active)" : ""}</option>
+                {templates.map((t, index) => (
+                  <option key={`${t.templateId}-${index}`} value={t.templateId}>{t.name}{t.isActive ? " (active)" : ""}</option>
                 ))}
               </select>
             </div>
@@ -556,7 +557,8 @@ export default function ResendPage() {
           </div>
         </div>
 
+        </div>
       </div>
-    </div>
+    </>
   );
 }
