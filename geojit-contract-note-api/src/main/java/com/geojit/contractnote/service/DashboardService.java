@@ -41,11 +41,11 @@ public class DashboardService {
                 .filter(j -> j.getStatus() == Job.JobStatus.FAILED)
                 .count();
 
-        long totalPdfsGenerated = jobsInRange.stream().mapToLong(Job::getPdfGeneratedCount).sum();
-        long totalEmailsSent    = jobsInRange.stream().mapToLong(Job::getEmailSentCount).sum();
-        long totalDelivered     = jobsInRange.stream().mapToLong(Job::getEmailDeliveredCount).sum(); // SNS-backed delivery receipts
-        long totalBounced       = jobsInRange.stream().mapToLong(Job::getEmailBouncedCount).sum();
-        long totalFailed        = jobsInRange.stream().mapToLong(Job::getFailedCount).sum();
+        long totalPdfsGenerated  = jobsInRange.stream().mapToLong(Job::getPdfGeneratedCount).sum();
+        long totalEmailsSent     = jobsInRange.stream().mapToLong(Job::getEmailSentCount).sum();
+        long totalDelivered      = jobsInRange.stream().mapToLong(Job::getEmailDeliveredCount).sum(); // SNS-backed delivery receipts
+        long totalBounced        = jobsInRange.stream().mapToLong(Job::getEmailBouncedCount).sum();
+        long totalFailedRecords  = jobsInRange.stream().mapToLong(Job::getInvalidRecordCount).sum(); // records never registered in pipeline
 
         long emailTotal = totalEmailsSent + totalBounced;
         double bounceRate   = emailTotal > 0 ? Math.round((double) totalBounced  / emailTotal    * 10000.0) / 100.0 : 0;
@@ -66,7 +66,8 @@ public class DashboardService {
                 .bounceRate(bounceRate)
                 .deliveryRate(deliveryRate)
                 .activeJobs(activeJobs)
-                .failedJobs(totalFailed > 0 ? totalFailed : failedJobs)
+                .failedJobs(failedJobs)
+                .totalFailedRecords(totalFailedRecords)
                 .hourlyActivity(hourlyActivity)
                 .recentActivity(recentActivity)
                 .build();

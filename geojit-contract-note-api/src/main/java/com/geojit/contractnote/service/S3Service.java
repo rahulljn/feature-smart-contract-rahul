@@ -188,6 +188,37 @@ public class S3Service {
     }
 
     /**
+     * List all template objects in the template bucket under active/ and drafts/ prefixes.
+     */
+    public List<S3ObjectSummary> listTemplateObjects() {
+        String bucket = appProperties.getAws().getS3().getTemplateBucket();
+        List<S3ObjectSummary> results = new ArrayList<>();
+        for (String prefix : List.of("active/", "drafts/")) {
+            try {
+                ListObjectsV2Request req = new ListObjectsV2Request()
+                        .withBucketName(bucket).withPrefix(prefix);
+                results.addAll(amazonS3.listObjectsV2(req).getObjectSummaries());
+            } catch (Exception e) {
+                log.warn("⚠️  S3 listTemplates skipped for prefix={} | reason={}", prefix, e.getMessage());
+            }
+        }
+        return results;
+    }
+
+    /**
+     * Download template HTML from S3 by key.
+     */
+    public String getTemplateContent(String key) {
+        String bucket = appProperties.getAws().getS3().getTemplateBucket();
+        try {
+            S3Object obj = amazonS3.getObject(bucket, key);
+            return new String(obj.getObjectContent().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new S3OperationException("Failed to read template from S3 | key=" + key + " | " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * Download PDF bytes from S3 pdf bucket.
      * Used by ResendService for email-only resends (PDF already exists).
      */

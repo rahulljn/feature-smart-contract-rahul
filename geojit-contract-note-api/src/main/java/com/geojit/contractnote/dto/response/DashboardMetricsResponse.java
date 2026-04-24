@@ -16,6 +16,7 @@ public class DashboardMetricsResponse {
     private double deliveryRate;
     private long activeJobs;
     private long failedJobs;
+    private long totalFailedRecords;
     private List<HourlyActivity> hourlyActivity;
     private List<RecentActivity> recentActivity;
 

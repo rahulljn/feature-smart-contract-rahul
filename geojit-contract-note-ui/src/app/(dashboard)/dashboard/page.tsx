@@ -126,15 +126,15 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 5 Metric Cards */}
+      {/* 6 Metric Cards */}
       {loadingMetrics ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {Array(5).fill(0).map((_, i) => (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {Array(6).fill(0).map((_, i) => (
             <div key={i} className="h-32 bg-slate-100 animate-pulse rounded-[1rem]" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <MetricCard
             title="Total customers"
             value={metrics?.totalCustomersInPipeline ?? 0}
@@ -150,17 +150,25 @@ export default function DashboardPage() {
             icon="task_alt"
             iconBg="bg-emerald-50"
             iconColor="text-emerald-600"
-            badge={{ label: `${metrics?.deliveryRate ?? 0}%`, ok: true }}
-            sub={(() => { const d = (metrics?.totalEmailsSent ?? 0) - (metrics?.totalBounced ?? 0); return d > 0 ? `${d} reached client inbox` : "Submitted to SES"; })()}
+            sub="Submitted to SES for delivery"
+          />
+          <MetricCard
+            title="Email delivered"
+            value={metrics?.totalDelivered ?? 0}
+            icon="mark_email_read"
+            iconBg="bg-emerald-50"
+            iconColor="text-emerald-600"
+            badge={{ label: `${metrics?.totalEmailsSent ? Math.round((metrics.totalDelivered ?? 0) / metrics.totalEmailsSent * 100) : 0}% of sent`, ok: true }}
+            sub="SNS-confirmed inbox delivery"
           />
           <MetricCard
             title="Records failed"
-            value={metrics?.failedJobs ?? 0}
+            value={metrics?.totalFailedRecords ?? 0}
             icon="error"
             iconBg="bg-rose-50"
             iconColor="text-rose-600"
-            sub="Could not process — review needed"
-            subErr={!!metrics?.failedJobs}
+            sub="Records rejected in Split or Invoke — never entered pipeline"
+            subErr={!!metrics?.totalFailedRecords}
           />
           <MetricCard
             title="PDFs generated"
@@ -183,6 +191,24 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Empty state — no data today */}
+      {!loadingMetrics && metrics && metrics.totalCustomersInPipeline === 0 && !dateFrom && !dateTo && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-100 rounded-xl text-sm text-amber-700">
+          <span className="material-symbols-outlined text-amber-400 text-base flex-shrink-0">info</span>
+          <span>No contract notes processed today.</span>
+          <button
+            onClick={() => {
+              const d = new Date();
+              setDateFrom(new Date(d.getTime() - 7 * 86400000).toISOString().slice(0, 10));
+              setDateTo(d.toISOString().slice(0, 10));
+            }}
+            className="ml-auto text-xs font-semibold text-[#003ea8] hover:underline flex-shrink-0"
+          >
+            View last 7 days
+          </button>
+        </div>
+      )}
+
       {/* Pipeline Funnel + Recent Activity */}
       <div className="grid lg:grid-cols-3 gap-5">
 
@@ -198,9 +224,8 @@ export default function DashboardPage() {
             const pdfs      = metrics.totalPdfsGenerated;
             const sent      = metrics.totalEmailsSent;
             const bounced   = metrics.totalBounced;
-            const confirmed = sent - bounced; // emails sent and not rejected = reached client inbox
-            const snsConfirmed = metrics.totalDelivered ?? 0; // SNS delivery receipts (partial — not all servers send these)
-            const failed   = metrics.failedJobs;
+            const snsConfirmed = metrics.totalDelivered ?? 0; // SNS-confirmed delivery receipts
+            const failed   = metrics.totalFailedRecords;
             return (
               <div className="space-y-1">
 
@@ -220,9 +245,9 @@ export default function DashboardPage() {
                 {/* Delivery outcomes — indent */}
                 <div className="ml-6 border-l-2 border-slate-200 pl-4 pt-1 pb-1 space-y-1">
 
-                  <FunnelRow icon="mark_email_read" label="Delivered" value={confirmed} total={total}
+                  <FunnelRow icon="mark_email_read" label="Delivered" value={snsConfirmed} total={total}
                     color="bg-emerald-500"
-                    note={confirmed > 0 ? `Emails sent and not bounced · ${snsConfirmed > 0 ? `${snsConfirmed} confirmed by server` : "server receipts pending"}` : "No emails delivered yet"} />
+                    note={snsConfirmed > 0 ? `${snsConfirmed.toLocaleString()} server-confirmed delivery receipts` : "Awaiting server delivery receipts"} />
 
                   <div className="flex items-center gap-2 py-1.5 px-3 bg-amber-50 border border-amber-100 rounded-xl">
                     <span className="material-symbols-outlined text-amber-500 text-[16px]">unsubscribe</span>

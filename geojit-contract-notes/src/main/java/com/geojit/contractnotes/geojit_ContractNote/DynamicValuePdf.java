@@ -297,6 +297,7 @@ public class DynamicValuePdf implements RequestHandler<Object, Integer> {
             return 200;
 
         } catch (Exception e) {
+            ExceptionPublisher.publish(jobId, "PDF", null, e);
             // Send PDF_FAILED status event
             sendPdfStatusEvent(null, e.getMessage());
             logger.error("DynamicValuePdf ERROR | contractNoteNo={} | error={} | endTime={}",

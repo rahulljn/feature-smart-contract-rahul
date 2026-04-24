@@ -11,8 +11,10 @@ import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.cloudwatchlogs.CloudWatchLogsClient;
 import software.amazon.awssdk.services.cloudwatchlogs.model.FilterLogEventsRequest;
 import software.amazon.awssdk.services.cloudwatchlogs.model.FilteredLogEvent;
+import software.amazon.awssdk.services.cloudwatchlogs.model.ResourceNotFoundException;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -107,15 +109,19 @@ public class CloudWatchService {
     private Instant resolveWindowStart(UUID jobId) {
         return jobRepository.findById(jobId)
                 .map(Job::getUploadedAt)
-                .map(t -> t.minusHours(1).toInstant(ZoneOffset.UTC))
+                // DB stores LocalDateTime in the JVM's system timezone (IST on dev, UTC on Lambda).
+                // Use systemDefault() so the Instant conversion is always correct, regardless of environment.
+                .map(t -> t.atZone(ZoneId.systemDefault()).toInstant().minusSeconds(3600))
                 .orElse(Instant.now().minusSeconds(3600));
     }
 
     private Instant resolveWindowEnd(UUID jobId) {
         return jobRepository.findById(jobId)
                 .map(Job::getUploadedAt)
-                .map(t -> t.plusHours(6).toInstant(ZoneOffset.UTC))
-                .filter(end -> end.isBefore(Instant.now()))
+                .map(t -> {
+                    Instant end = t.atZone(ZoneId.systemDefault()).toInstant().plusSeconds(21600); // +6h
+                    return end.isAfter(Instant.now()) ? Instant.now() : end;
+                })
                 .orElse(Instant.now());
     }
 
@@ -137,8 +143,11 @@ public class CloudWatchService {
                     .map(e -> toResponse(e, logGroup))
                     .collect(Collectors.toList());
 
+        } catch (ResourceNotFoundException ex) {
+            log.warn("CloudWatch log group not found — verify Lambda function name config: {}", logGroup);
+            return Collections.emptyList();
         } catch (Exception ex) {
-            log.debug("CloudWatch fetch skipped for {}: {}", logGroup, ex.getMessage());
+            log.warn("CloudWatch fetch failed for {}: {}", logGroup, ex.getMessage());
             return Collections.emptyList();
         }
     }

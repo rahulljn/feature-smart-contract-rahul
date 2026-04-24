@@ -11,4 +11,7 @@ public class ExceptionCountsResponse {
     private long emailFailed;
     private long bounced;
     private long skipped;
+    private long invalidRecords;
+    private long hardBounced;
+    private long softBounced;
 }

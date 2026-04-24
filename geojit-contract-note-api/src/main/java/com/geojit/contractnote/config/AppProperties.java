@@ -34,6 +34,7 @@ public class AppProperties {
         public static class Sqs {
             private String pipelineStatusQueue;
             private String mapSplitQueue;
+            private String exceptionsQueueUrl;
         }
 
         @Data

@@ -49,6 +49,8 @@ public class EmailNotification implements RequestHandler<S3Event, String> {
         istFormat.setTimeZone(TimeZone.getTimeZone("Asia/Kolkata"));
         logger.info("EmailNotification Started | startTime={}", istFormat.format(new Date()));
 
+        String jobid = null;
+
         try {
             S3EventNotificationRecord record = s3event.getRecords().get(0);
             bucketName = record.getS3().getBucket().getName();
@@ -61,6 +63,7 @@ public class EmailNotification implements RequestHandler<S3Event, String> {
             // get metadata of s3 file object
             ObjectMetadata objectMetadata = s3PdfFile.getObjectMetadata();
             Map<String, String> userMetadataMap = objectMetadata.getUserMetadata();
+            jobid = userMetadataMap.get("jobid");
             S3ObjectInputStream s3is = s3PdfFile.getObjectContent();
             String filePath = "/tmp/" + fileName[fileName.length - 1];
             FileOutputStream fos = new FileOutputStream(new File(filePath));
@@ -88,6 +91,7 @@ public class EmailNotification implements RequestHandler<S3Event, String> {
             }
 
         } catch (Exception e) {
+            ExceptionPublisher.publish(jobid, "Email", null, e);
             logger.error("EmailNotification ERROR | file={} | error={} | endTime={}",
                     s3fileName, e.getMessage(), istFormat.format(new Date()), e);
         } finally {

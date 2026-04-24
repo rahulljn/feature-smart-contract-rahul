@@ -3,6 +3,7 @@ package com.geojit.contractnote.controller;
 import com.geojit.contractnote.dto.request.TemplateFieldsRequest;
 import com.geojit.contractnote.dto.request.TemplateRequest;
 import com.geojit.contractnote.dto.response.ApiResponse;
+import com.geojit.contractnote.dto.response.S3TemplateResponse;
 import com.geojit.contractnote.entity.*;
 import com.geojit.contractnote.repository.UserRepository;
 import com.geojit.contractnote.service.EmailTemplateService;
@@ -28,9 +29,15 @@ public class TemplateController {
     private final UserRepository          userRepository;
 
     @GetMapping
-    @Operation(summary = "List all email templates")
-    public ResponseEntity<ApiResponse<List<EmailTemplate>>> getAll() {
-        return ResponseEntity.ok(ApiResponse.ok(emailTemplateService.getAll()));
+    @Operation(summary = "List all email templates from S3")
+    public ResponseEntity<ApiResponse<List<S3TemplateResponse>>> getAll() {
+        return ResponseEntity.ok(ApiResponse.ok(emailTemplateService.listFromS3()));
+    }
+
+    @GetMapping("/{name}/content")
+    @Operation(summary = "Get template HTML content from S3 by name")
+    public ResponseEntity<ApiResponse<String>> getContent(@PathVariable String name) {
+        return ResponseEntity.ok(ApiResponse.ok(emailTemplateService.getContentFromS3(name)));
     }
 
     @GetMapping("/active")

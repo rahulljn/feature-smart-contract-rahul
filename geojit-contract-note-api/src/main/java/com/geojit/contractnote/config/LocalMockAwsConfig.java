@@ -5,6 +5,8 @@ import com.amazonaws.services.lambda.AWSLambda;
 import com.amazonaws.services.lambda.AWSLambdaClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.secretsmanager.AWSSecretsManager;
+import com.amazonaws.services.secretsmanager.AWSSecretsManagerClientBuilder;
 import com.amazonaws.services.simpleemail.AmazonSimpleEmailService;
 import com.amazonaws.services.simpleemail.AmazonSimpleEmailServiceClientBuilder;
 import com.amazonaws.services.sqs.AmazonSQS;
@@ -87,6 +89,15 @@ public class LocalMockAwsConfig {
         return CloudWatchLogsClient.builder()
                 .region(Region.of(awsRegion))
                 .credentialsProvider(DefaultCredentialsProvider.create())
+                .build();
+    }
+
+    @Bean
+    public AWSSecretsManager awsSecretsManager() {
+        log.info("✅  LOCAL PROFILE: Using real AWSSecretsManager client (credentials from ~/.aws/credentials)");
+        return AWSSecretsManagerClientBuilder.standard()
+                .withRegion(awsRegion)
+                .withCredentials(new DefaultAWSCredentialsProviderChain())
                 .build();
     }
 }

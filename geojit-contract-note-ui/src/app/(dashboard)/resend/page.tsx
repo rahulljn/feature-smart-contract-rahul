@@ -482,7 +482,7 @@ export default function ResendPage() {
                         />
                       </td>
                       <td className="px-4 py-3 font-mono font-bold text-slate-800">{c.partyCode}</td>
-                      <td className="px-4 py-3 text-slate-600 max-w-[220px] truncate">{c.email || "—"}</td>
+                      <td className="px-4 py-3 text-slate-600 max-w-[220px] truncate" title={c.email || ""}>{c.email || "—"}</td>
                       <td className="px-4 py-3"><StatusBadge status={c.emailStatus} /></td>
                       <td className="px-4 py-3 text-slate-500">
                         {c.bounceType ? (

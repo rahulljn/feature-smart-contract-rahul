@@ -29,6 +29,10 @@ public class JobResponse {
     private int          failureCount;
     private int          progressPercent;
     private LocalDateTime createdAt;
+    private int          invalidRecordCount;
+    private int          pdfFailedCount;
+    private int          hardBounceCount;
+    private int          softBounceCount;
 
     public static JobResponse from(Job job) {
         int total = job.getTotalCustomers();
@@ -63,6 +67,10 @@ public class JobResponse {
                 .failureCount(job.getFailedCount())
                 .progressPercent(progress)
                 .createdAt(job.getCreatedAt())
+                .invalidRecordCount(job.getInvalidRecordCount())
+                .pdfFailedCount(job.getPdfFailedCount())
+                .hardBounceCount(job.getHardBounceCount())
+                .softBounceCount(job.getSoftBounceCount())
                 .build();
     }
 

@@ -264,6 +264,7 @@ public class PullBounceSQS implements RequestHandler<Object, Object> {
             System.out.println("PullBounceSQS completed successfully.");
 
         } catch (Exception e) {
+            ExceptionPublisher.publish(null, "PullBounce", null, e);
             System.err.println("Fatal error in PullBounceSQS: " + e.getMessage());
             e.printStackTrace();
         } finally {

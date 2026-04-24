@@ -250,6 +250,7 @@ public class PullDeliverSQS implements RequestHandler<Object, Object> {
             System.out.println("PullDeliverSQS completed successfully.");
 
         } catch (Exception e) {
+            ExceptionPublisher.publish(null, "PullDelivery", null, e);
             System.err.println("Fatal error in PullDeliverSQS: " + e.getMessage());
             e.printStackTrace();
         } finally {

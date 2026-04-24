@@ -70,6 +70,18 @@ public class Job {
     @Column(name = "failed_count")
     private int failedCount = 0;
 
+    @Column(name = "invalid_record_count")
+    private int invalidRecordCount = 0;
+
+    @Column(name = "pdf_failed_count")
+    private int pdfFailedCount = 0;
+
+    @Column(name = "hard_bounce_count")
+    private int hardBounceCount = 0;
+
+    @Column(name = "soft_bounce_count")
+    private int softBounceCount = 0;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

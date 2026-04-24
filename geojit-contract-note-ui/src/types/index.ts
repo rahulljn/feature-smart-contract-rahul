@@ -54,6 +54,10 @@ export interface Job {
   failureCount?: number;
   progressPercent?: number;
   templateId?: string;
+  invalidRecordCount?: number;
+  pdfFailedCount?: number;
+  hardBounceCount?: number;
+  softBounceCount?: number;
 }
 
 // ─── Pipeline Stats ───────────────────────────────────────────────────
@@ -112,6 +116,7 @@ export interface DashboardMetrics {
   deliveryRate: number;
   activeJobs: number;
   failedJobs: number;
+  totalFailedRecords: number;
   hourlyActivity: HourlyActivity[];
   recentActivity: RecentActivity[];
 }
@@ -174,6 +179,14 @@ export interface EmailTemplate {
   footerColor?: string;
 }
 
+export interface S3Template {
+  name: string;
+  status: 'active' | 'draft';
+  s3Key: string;
+  lastModified: string;
+  size: number;
+}
+
 export interface TemplateFieldsRequest {
   subject: string;
   greetingText: string;
@@ -190,6 +203,14 @@ export interface TemplateValidateResult {
 }
 
 // ─── Certificate ──────────────────────────────────────────────────────
+export interface SecretsCert {
+  secretName: string;
+  description: string | null;
+  createdDate: string | null;
+  lastChangedDate: string | null;
+  isActive: boolean;
+}
+
 export interface Certificate {
   certId: string;
   fileName: string;
@@ -215,25 +236,6 @@ export interface SesConfig {
   region: string;
   isActive: boolean;
   createdAt: string;
-}
-
-// ─── Audit Log ────────────────────────────────────────────────────────
-export type AuditAction =
-  | "LOGIN" | "LOGOUT" | "UPLOAD" | "RESEND" | "BULK_RESEND"
-  | "SUPPRESS" | "UNSUPPRESS" | "TEMPLATE_EDIT" | "CERT_UPLOAD"
-  | "CONFIG_CHANGE" | "USER_CREATE" | "USER_UPDATE"
-  | "USER_DEACTIVATE" | "VIEW_PDF" | "DOWNLOAD_REPORT";
-
-export interface AuditLog {
-  id: number;
-  userId?: string;
-  userEmail?: string;
-  action: AuditAction;
-  targetEntity?: string;
-  details?: Record<string, unknown>;
-  ipAddress?: string;
-  userAgent?: string;
-  eventTimestamp: string;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────
@@ -278,6 +280,9 @@ export interface ExceptionCounts {
   emailFailed: number;
   bounced: number;
   skipped: number;
+  invalidRecords: number;
+  hardBounced: number;
+  softBounced: number;
 }
 
 // ─── CloudWatch Exception ─────────────────────────────────────────────
@@ -293,6 +298,18 @@ export interface CloudWatchLambda {
   logGroup: string;
   errorCount: number;
   events: CloudWatchException[];
+}
+
+// ─── Lambda Exception ─────────────────────────────────────────────────
+export interface LambdaException {
+  id: number;
+  jobId: string;
+  lambdaName: string;
+  recordId?: string;
+  errorType?: string;
+  errorMessage?: string;
+  stackTrace?: string;
+  occurredAt: string;
 }
 
 // ─── Validation ───────────────────────────────────────────────────────

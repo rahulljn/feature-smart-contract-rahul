@@ -45,11 +45,17 @@ public class JobTimeoutService {
             long bounced      = jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.BOUNCED);
             long emailFailed  = jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.FAILED);
             long pdfFailed    = jobCustomerRepository.countByJob_JobIdAndPdfStatus(jobId, JobCustomer.PdfStatus.FAILED);
-            long invalidCount = pdfFailed + unregistered;
+            long hardBounced = jobCustomerRepository.countHardBouncedByJobId(jobId);
+            long softBounced = jobCustomerRepository.countSoftBouncedByJobId(jobId);
 
-            job.setFailedCount((int) invalidCount);
+            job.setFailedCount((int)(pdfFailed + unregistered));  // keep — used by completion logic
+            job.setPdfFailedCount((int) pdfFailed);
+            job.setInvalidRecordCount((int) unregistered);
             job.setEmailFailedCount((int) emailFailed);
+            job.setHardBounceCount((int) hardBounced);
+            job.setSoftBounceCount((int) softBounced);
 
+            long invalidCount = pdfFailed + unregistered;
             if (invalidCount > 0 || bounced > 0 || emailFailed > 0 || delivered < (registered - pdfFailed)) {
                 job.setStatus(Job.JobStatus.PARTIAL);
             } else {

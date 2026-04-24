@@ -1,6 +1,7 @@
 package com.geojit.contractnote.controller;
 
 import com.geojit.contractnote.dto.response.ApiResponse;
+import com.geojit.contractnote.dto.response.SecretsManagerCertResponse;
 import com.geojit.contractnote.dto.response.SesStatisticsResponse;
 import com.geojit.contractnote.entity.*;
 import com.geojit.contractnote.exception.ResourceNotFoundException;
@@ -8,6 +9,7 @@ import com.geojit.contractnote.exception.ValidationException;
 import com.geojit.contractnote.repository.*;
 import com.geojit.contractnote.repository.UserRepository;
 import com.geojit.contractnote.service.S3Service;
+import com.geojit.contractnote.service.SecretsManagerService;
 import com.geojit.contractnote.service.SesStatisticsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,6 +43,7 @@ public class ConfigController {
     private final SesConfigRepository   sesConfigRepository;
     private final CertificateRepository certificateRepository;
     private final SesStatisticsService  sesStatisticsService;
+    private final SecretsManagerService secretsManagerService;
     private final S3Service             s3Service;
     private final UserRepository        userRepository;
 
@@ -114,10 +117,9 @@ public class ConfigController {
     // ─── Certificates ──────────────────────────────────────────────
 
     @GetMapping("/certificates")
-    @Operation(summary = "List all certificates")
-    @Transactional
-    public ResponseEntity<ApiResponse<List<Certificate>>> getCertificates() {
-        return ResponseEntity.ok(ApiResponse.ok(certificateRepository.findAll()));
+    @Operation(summary = "List all certificates from AWS Secrets Manager")
+    public ResponseEntity<ApiResponse<List<SecretsManagerCertResponse>>> getCertificates() {
+        return ResponseEntity.ok(ApiResponse.ok(secretsManagerService.listCertificates()));
     }
 
     @GetMapping("/certificates/active")
@@ -130,18 +132,24 @@ public class ConfigController {
                         .orElseThrow(() -> new ResourceNotFoundException("Certificate", "isActive", true))));
     }
 
-    @PostMapping("/certificates/{id}/activate")
+    @PostMapping("/certificates/activate")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Set a certificate as active (deactivates all others)")
+    @Operation(summary = "Set a certificate as active by secretName (deactivates all others)")
     @Transactional
-    public ResponseEntity<ApiResponse<Certificate>> activateCertificate(@PathVariable UUID id) {
-        // Deactivate all first
+    public ResponseEntity<ApiResponse<SecretsManagerCertResponse>> activateCertificate(
+            @RequestParam String secretName) {
         certificateRepository.findAll().forEach(c -> { c.setActive(false); certificateRepository.save(c); });
-        // Activate requested
-        Certificate cert = certificateRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Certificate", "id", id));
+        Certificate cert = certificateRepository.findBySecretName(secretName)
+                .orElseGet(() -> Certificate.builder()
+                        .fileName(secretName)
+                        .secretName(secretName)
+                        .isActive(false)
+                        .build());
         cert.setActive(true);
-        return ResponseEntity.ok(ApiResponse.ok(certificateRepository.save(cert)));
+        certificateRepository.save(cert);
+        return ResponseEntity.ok(ApiResponse.ok(secretsManagerService.listCertificates().stream()
+                .filter(r -> r.getSecretName().equals(secretName))
+                .findFirst().orElseThrow()));
     }
 
     @PostMapping(value = "/certificates/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

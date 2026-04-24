@@ -69,6 +69,22 @@ public interface JobRepository extends JpaRepository<Job, UUID> {
     @Query("UPDATE Job j SET j.failedCount = j.failedCount + 1 WHERE j.jobId = :jobId")
     void incrementFailedCount(UUID jobId);
 
+    @Modifying
+    @Query("UPDATE Job j SET j.pdfFailedCount = j.pdfFailedCount + 1 WHERE j.jobId = :jobId")
+    void incrementPdfFailedCount(UUID jobId);
+
+    @Modifying
+    @Query("UPDATE Job j SET j.invalidRecordCount = j.invalidRecordCount + 1 WHERE j.jobId = :jobId")
+    void incrementInvalidRecordCount(UUID jobId);
+
+    @Modifying
+    @Query("UPDATE Job j SET j.hardBounceCount = j.hardBounceCount + 1 WHERE j.jobId = :jobId")
+    void incrementHardBounceCount(UUID jobId);
+
+    @Modifying
+    @Query("UPDATE Job j SET j.softBounceCount = j.softBounceCount + 1 WHERE j.jobId = :jobId")
+    void incrementSoftBounceCount(UUID jobId);
+
     @Query("SELECT j FROM Job j WHERE j.status IN ('PROCESSING', 'EMAILING') AND j.uploadedAt < :cutoff")
     List<Job> findStuckJobs(LocalDateTime cutoff);
 }

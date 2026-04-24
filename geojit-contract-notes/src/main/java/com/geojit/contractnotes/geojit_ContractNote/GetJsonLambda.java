@@ -79,6 +79,7 @@ public class GetJsonLambda implements RequestHandler<Object, Integer> {
             return 200;
 
         } catch (Exception e) {
+            ExceptionPublisher.publish("", "GetJson", null, e);
             logger.error("GetJsonLambda ERROR | error={} | endTime={}", e.getMessage(), istFormat.format(new Date()), e);
             return 500;
         } finally {

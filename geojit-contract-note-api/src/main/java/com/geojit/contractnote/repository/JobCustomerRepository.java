@@ -68,6 +68,12 @@ public interface JobCustomerRepository extends JpaRepository<JobCustomer, Long> 
 
     long countByJob_JobIdAndPdfStatus(UUID jobId, JobCustomer.PdfStatus status);
 
+    @Query("SELECT COUNT(jc) FROM JobCustomer jc WHERE jc.job.jobId = :jobId AND jc.emailStatus = 'BOUNCED' AND LOWER(jc.bounceType) LIKE '%permanent%'")
+    long countHardBouncedByJobId(@Param("jobId") UUID jobId);
+
+    @Query("SELECT COUNT(jc) FROM JobCustomer jc WHERE jc.job.jobId = :jobId AND jc.emailStatus = 'BOUNCED' AND LOWER(jc.bounceType) LIKE '%transient%'")
+    long countSoftBouncedByJobId(@Param("jobId") UUID jobId);
+
     /** For bulk resend: all customers with failed PDF or failed/bounced email */
     @Query("""
             SELECT jc FROM JobCustomer jc
@@ -112,20 +118,27 @@ public interface JobCustomerRepository extends JpaRepository<JobCustomer, Long> 
             FROM job_customers
             WHERE job_id = :jobId AND email_sent_at IS NOT NULL
             """, nativeQuery = true)
-    Object[] calculateLatencyPercentiles(@Param("jobId") UUID jobId);
+    List<Object[]> calculateLatencyPercentiles(@Param("jobId") UUID jobId);
 
     /** All customers for a specific job matching any of the given party codes */
     @Query("SELECT jc FROM JobCustomer jc WHERE jc.job.jobId = :jobId AND jc.partyCode IN :partyCodes")
     List<JobCustomer> findByJobIdAndPartyCodes(@Param("jobId") UUID jobId, @Param("partyCodes") List<String> partyCodes);
 
     /** Cross-job paginated listing for the Resend page — filter by email statuses, optional job and date range */
-    @Query("""
+    @Query(value = """
             SELECT jc FROM JobCustomer jc
             WHERE jc.emailStatus IN :statuses
               AND (:jobId IS NULL OR jc.job.jobId = :jobId)
               AND (:from  IS NULL OR jc.createdAt >= :from)
               AND (:to    IS NULL OR jc.createdAt <= :to)
             ORDER BY jc.createdAt DESC
+            """,
+            countQuery = """
+            SELECT COUNT(jc) FROM JobCustomer jc
+            WHERE jc.emailStatus IN :statuses
+              AND (:jobId IS NULL OR jc.job.jobId = :jobId)
+              AND (:from  IS NULL OR jc.createdAt >= :from)
+              AND (:to    IS NULL OR jc.createdAt <= :to)
             """)
     Page<JobCustomer> findGlobalByEmailStatuses(
             @Param("statuses") List<JobCustomer.EmailStatus> statuses,

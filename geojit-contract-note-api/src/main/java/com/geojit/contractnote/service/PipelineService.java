@@ -132,8 +132,8 @@ public class PipelineService {
                         }
                         case PDF_FAILED -> {
                             jc.setPdfStatus(JobCustomer.PdfStatus.FAILED);
-                            // Only PDF failures count as "invalid customers"
-                            jobRepository.incrementFailedCount(event.getJobId());
+                            jobRepository.incrementFailedCount(event.getJobId());    // keep — used by checkAndCompleteJob
+                            jobRepository.incrementPdfFailedCount(event.getJobId()); // for UI display
                         }
                         case EMAIL_SENT -> {
                             jc.setEmailStatus(JobCustomer.EmailStatus.SENT);
@@ -144,6 +144,9 @@ public class PipelineService {
                         }
                         case EMAIL_FAILED -> {
                             jc.setEmailStatus(JobCustomer.EmailStatus.FAILED);
+                            // Persist the Lambda error message so the Exceptions UI can display the root cause
+                            Object err = event.getPayload() != null ? event.getPayload().get("error") : null;
+                            if (err != null && !err.toString().isBlank()) jc.setBounceReason(err.toString());
                             jobRepository.incrementEmailFailedCount(event.getJobId());
                         }
                         case EMAIL_SKIPPED -> {
@@ -180,6 +183,12 @@ public class PipelineService {
                                 if (bt != null) jc.setBounceType(bt.toString());
                                 if (br != null) jc.setBounceReason(br.toString());
                                 jobRepository.incrementEmailBouncedCount(event.getJobId());
+                                String bounceTypeStr = bt != null ? bt.toString().toLowerCase() : "";
+                                if (bounceTypeStr.contains("permanent")) {
+                                    jobRepository.incrementHardBounceCount(event.getJobId());
+                                } else if (bounceTypeStr.contains("transient")) {
+                                    jobRepository.incrementSoftBounceCount(event.getJobId());
+                                }
                                 emailEventRepository.save(EmailEvent.builder()
                                         .sesMessageId(jc.getSesMessageId())
                                         .partyCode(event.getPartyCode())
@@ -202,6 +211,7 @@ public class PipelineService {
                                 jc.setEmailStatus(JobCustomer.EmailStatus.BOUNCED);
                                 jc.setBouncedAt(event.getEventTimestamp());
                                 jobRepository.incrementEmailBouncedCount(event.getJobId());
+                                jobRepository.incrementHardBounceCount(event.getJobId()); // complaints = permanent hard bounces
                                 emailEventRepository.save(EmailEvent.builder()
                                         .sesMessageId(jc.getSesMessageId())
                                         .partyCode(event.getPartyCode())

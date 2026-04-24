@@ -130,7 +130,8 @@ public class JobService {
                 ));
 
         // Latency percentiles (null-safe: returns zeros if no emails sent yet)
-        Object[] latency = jobCustomerRepository.calculateLatencyPercentiles(jobId);
+        List<Object[]> latencyRows = jobCustomerRepository.calculateLatencyPercentiles(jobId);
+        Object[] latency = latencyRows.isEmpty() ? null : latencyRows.get(0);
         double median = latency != null && latency[0] != null ? ((Number) latency[0]).doubleValue() : 0.0;
         double p95    = latency != null && latency[1] != null ? ((Number) latency[1]).doubleValue() : 0.0;
 
@@ -163,12 +164,15 @@ public class JobService {
 
     @Transactional(readOnly = true)
     public ExceptionCountsResponse getExceptionCounts(UUID jobId) {
-        findJobById(jobId); // validate existence
+        Job job = findJobById(jobId);
         return ExceptionCountsResponse.builder()
-                .pdfFailed(jobCustomerRepository.countByJob_JobIdAndPdfStatus(jobId, JobCustomer.PdfStatus.FAILED))
-                .emailFailed(jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.FAILED))
-                .bounced(jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.BOUNCED))
-                .skipped(jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.SKIPPED))
+                .pdfFailed(job.getPdfFailedCount())
+                .emailFailed(job.getEmailFailedCount())
+                .bounced(job.getEmailBouncedCount())
+                .skipped(job.getEmailSkippedCount())
+                .invalidRecords(job.getInvalidRecordCount())
+                .hardBounced(job.getHardBounceCount())
+                .softBounced(job.getSoftBounceCount())
                 .build();
     }
 

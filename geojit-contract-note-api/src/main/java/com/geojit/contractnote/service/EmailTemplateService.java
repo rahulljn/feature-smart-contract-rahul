@@ -2,6 +2,7 @@ package com.geojit.contractnote.service;
 
 import com.geojit.contractnote.dto.request.TemplateFieldsRequest;
 import com.geojit.contractnote.dto.request.TemplateRequest;
+import com.geojit.contractnote.dto.response.S3TemplateResponse;
 import com.geojit.contractnote.entity.*;
 import com.geojit.contractnote.exception.*;
 import com.geojit.contractnote.repository.EmailTemplateRepository;
@@ -29,6 +30,20 @@ public class EmailTemplateService {
     @Transactional(readOnly = true)
     public List<EmailTemplate> getAll() {
         return emailTemplateRepository.findAll();
+    }
+
+    public List<S3TemplateResponse> listFromS3() {
+        return s3Service.listTemplateObjects().stream()
+                .map(S3TemplateResponse::from)
+                .toList();
+    }
+
+    public String getContentFromS3(String name) {
+        try {
+            return s3Service.getTemplateContent("active/" + name + ".html");
+        } catch (Exception e) {
+            return s3Service.getTemplateContent("drafts/" + name + ".html");
+        }
     }
 
     public EmailTemplate getById(UUID id) {

@@ -107,6 +107,7 @@ public class Split implements RequestHandler<S3Event, String> {
             processStatementFile(fullObject.getObjectContent());
 
         } catch (Exception e) {
+            ExceptionPublisher.publish(jobId, "Split", null, e);
             logger.error("Exception in Geojit Split Lambda: {}", e.getMessage(), e);
         } finally {
             try {

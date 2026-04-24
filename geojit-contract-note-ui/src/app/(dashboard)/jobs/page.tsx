@@ -127,8 +127,8 @@ export default function JobsPage() {
             <tbody>
               {filtered.map(job => (
                 <tr key={job.jobId} className="t-row">
-                  <td className="px-5 py-3"><Link href={`/jobs/${job.jobId}`} className="text-sm font-semibold text-slate-800 hover:text-[#003ea8] truncate block max-w-[200px]">{job.fileName}</Link></td>
-                  <td className="px-5 py-3 mono text-xs text-slate-600">{job.jobId.slice(0, 8)}…</td>
+                  <td className="px-5 py-3"><Link href={`/jobs/${job.jobId}`} title={job.fileName} className="text-sm font-semibold text-slate-800 hover:text-[#003ea8] truncate block max-w-[200px]">{job.fileName}</Link></td>
+                  <td className="px-5 py-3 mono text-xs text-slate-600" title={job.jobId}>{job.jobId.slice(0, 8)}…</td>
                   <td className="px-5 py-3"><span className="seg-chip">{job.segmentType ?? "—"}</span></td>
                   <td className="px-5 py-3 text-right mono text-xs text-slate-700">{job.totalRecords?.toLocaleString() ?? "—"}</td>
                   <td className="px-5 py-3"><span className={cn("pill", statusPill[job.status] ?? "pill-neu")}><span className={cn("dot", statusDot[job.status] ?? "dot-info")} />{{VALIDATING:"Validating",SPLITTING:"Reading file",PROCESSING:"Generating PDFs",EMAILING:"Sending emails",COMPLETED:"Completed",FAILED:"Failed",PARTIAL:"Completed with issues"}[job.status] ?? job.status}</span></td>

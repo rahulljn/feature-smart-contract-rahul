@@ -83,6 +83,7 @@ app:
     sqs:
       pipeline-status-queue: geojit-pipeline-status-queue.fifo
       map-split-queue: geojit-map-split-processing-queue.fifo
+      exceptions-queue-url: ${EXCEPTIONS_QUEUE_URL:}
     lambda:
       split-lambda: split-lambda-geojit
     presigned-url-expiry-hours: 168   # 7 days

@@ -16,6 +16,8 @@ app:
     sqs:
       pipeline-status-queue: geojit-pipeline-status-queue.fifo
       map-split-queue: geojit-map-split-processing-queue.fifo
+      # Set EXCEPTIONS_QUEUE_URL env var after creating contract-note-exceptions-queue in AWS Console
+      exceptions-queue-url: ${EXCEPTIONS_QUEUE_URL:}
     lambda:
       split-lambda: split-file-lambda-geojit
 

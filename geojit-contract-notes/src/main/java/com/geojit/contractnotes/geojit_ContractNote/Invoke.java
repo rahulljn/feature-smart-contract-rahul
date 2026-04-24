@@ -241,10 +241,13 @@ public class Invoke implements RequestHandler<Object, String> {
             }
 
         } catch (AmazonServiceException e) {
+            ExceptionPublisher.publish(jobId, "Invoke", null, e);
             logger.error("AWS Service Exception: {}", e.getMessage(), e);
         } catch (SdkClientException e) {
+            ExceptionPublisher.publish(jobId, "Invoke", null, e);
             logger.error("AWS SDK Exception: {}", e.getMessage(), e);
         } catch (IOException e) {
+            ExceptionPublisher.publish(jobId, "Invoke", null, e);
             logger.error("IO Exception: {}", e.getMessage(), e);
         } finally {
 

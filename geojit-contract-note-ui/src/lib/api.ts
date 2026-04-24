@@ -85,6 +85,11 @@ export const jobsApi = {
   streamUrl: (jobId: string) => `${API_BASE}/jobs/${jobId}/stream`,
 };
 
+export const lambdaExceptionsApi = {
+  list: (jobId: string, lambdaName?: string) =>
+    api.get("/exceptions", { params: { jobId, lambdaName: lambdaName || undefined } }),
+};
+
 export const dashboardApi = {
   metrics: (from?: string, to?: string) =>
     api.get("/dashboard/metrics", { params: { from: from || undefined, to: to || undefined } }),
@@ -118,14 +123,10 @@ export const suppressionApi = {
   pushToAws: () => api.post("/suppression/push-aws"),
 };
 
-export const auditApi = {
-  list: (page = 0, size = 50, search?: string, from?: string, to?: string, actions?: string) =>
-    api.get("/audit", { params: { page, size, search, from, to, actions } }),
-};
-
 export const templatesApi = {
   list: () => api.get("/templates"),
   get: (id: string) => api.get(`/templates/${id}`),
+  content: (name: string) => api.get(`/templates/${name}/content`),
   create: (data: object) => api.post("/templates", data),
   update: (id: string, data: object) => api.put(`/templates/${id}`, data),
   updateFields: (id: string, data: object) => api.put(`/templates/${id}/fields`, data),
@@ -140,7 +141,8 @@ export const configApi = {
   sesActivate: (id: string) => api.post(`/config/ses/${id}/activate`),
   certList: () => api.get("/config/certificates"),
   activeCert: () => api.get("/config/certificates/active"),
-  certActivate: (id: string) => api.post(`/config/certificates/${id}/activate`),
+  certActivate: (secretName: string) =>
+    api.post(`/config/certificates/activate?secretName=${encodeURIComponent(secretName)}`),
   certUpload: (form: FormData) =>
     api.post("/config/certificates/upload", form, { headers: { "Content-Type": "multipart/form-data" } }),
   sesStatistics: (startDate?: string, endDate?: string) =>

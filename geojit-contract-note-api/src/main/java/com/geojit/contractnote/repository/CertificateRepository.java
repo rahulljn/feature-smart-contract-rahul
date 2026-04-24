@@ -10,4 +10,5 @@ import java.util.UUID;
 @Repository
 public interface CertificateRepository extends JpaRepository<Certificate, UUID> {
     Optional<Certificate> findByIsActiveTrue();
+    Optional<Certificate> findBySecretName(String secretName);
 }

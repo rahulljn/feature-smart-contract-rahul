@@ -35,8 +35,7 @@ const navSections: { name: string; items: NavItem[] }[] = [
       { href: "/templates",    label: "Templates",        icon: "mail" },
       { href: "/ses-config",   label: "Email Config",     icon: "settings" },
       { href: "/certificates", label: "Certificates",     icon: "verified" },
-      { href: "/audit",        label: "Audit Log",        icon: "history" },
-      { href: "/users",        label: "Users & Roles",    icon: "manage_accounts", adminOnly: true },
+{ href: "/users",        label: "Users & Roles",    icon: "manage_accounts", adminOnly: true },
     ],
   },
 ];
