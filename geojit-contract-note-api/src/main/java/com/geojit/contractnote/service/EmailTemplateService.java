@@ -46,6 +46,52 @@ public class EmailTemplateService {
         }
     }
 
+    public S3TemplateResponse saveFieldsToS3(String name, TemplateFieldsRequest req) {
+        String key = s3Service.listTemplateObjects().stream()
+                .filter(obj -> {
+                    String k = obj.getKey();
+                    String n = k.substring(k.lastIndexOf('/') + 1).replaceAll("\\.html$", "");
+                    return n.equals(name);
+                })
+                .map(com.amazonaws.services.s3.model.S3ObjectSummary::getKey)
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Template", "name", name));
+        EmailTemplate t = EmailTemplate.builder()
+                .greetingText(req.getGreetingText())
+                .bodyIntro(req.getBodyIntro())
+                .logoUrl(req.getLogoUrl())
+                .bodyColor(req.getBodyColor())
+                .footerColor(req.getFooterColor())
+                .build();
+        String html = buildHtml(t);
+        s3Service.writeTemplateContent(key, html);
+        return s3Service.listTemplateObjects().stream()
+                .filter(obj -> obj.getKey().equals(key))
+                .map(S3TemplateResponse::from)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    public S3TemplateResponse saveContentToS3(String name, String content) {
+        if (content == null || content.isBlank())
+            throw new ValidationException("HTML content cannot be empty");
+        String key = s3Service.listTemplateObjects().stream()
+                .filter(obj -> {
+                    String k = obj.getKey();
+                    String n = k.substring(k.lastIndexOf('/') + 1).replaceAll("\\.html$", "");
+                    return n.equals(name);
+                })
+                .map(com.amazonaws.services.s3.model.S3ObjectSummary::getKey)
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Template", "name", name));
+        s3Service.writeTemplateContent(key, content);
+        return s3Service.listTemplateObjects().stream()
+                .filter(obj -> obj.getKey().equals(key))
+                .map(S3TemplateResponse::from)
+                .findFirst()
+                .orElseThrow();
+    }
+
     public EmailTemplate getById(UUID id) {
         return emailTemplateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("EmailTemplate", "id", id));

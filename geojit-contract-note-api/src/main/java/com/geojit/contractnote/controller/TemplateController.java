@@ -40,6 +40,25 @@ public class TemplateController {
         return ResponseEntity.ok(ApiResponse.ok(emailTemplateService.getContentFromS3(name)));
     }
 
+    @PutMapping("/{name}/fields")
+    @PreAuthorize("hasAnyRole('ADMIN','OPS_MANAGER')")
+    @Operation(summary = "Update editable fields, rebuild HTML from template skeleton, and save to S3")
+    public ResponseEntity<ApiResponse<S3TemplateResponse>> saveFields(
+            @PathVariable String name,
+            @Valid @RequestBody TemplateFieldsRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Template saved", emailTemplateService.saveFieldsToS3(name, req)));
+    }
+
+    @PutMapping("/{name}/content")
+    @PreAuthorize("hasAnyRole('ADMIN','OPS_MANAGER')")
+    @Operation(summary = "Save updated HTML content for a template back to S3")
+    public ResponseEntity<ApiResponse<S3TemplateResponse>> saveContent(
+            @PathVariable String name,
+            @RequestBody Map<String, String> body) {
+        String content = body.get("content");
+        return ResponseEntity.ok(ApiResponse.ok("Template saved", emailTemplateService.saveContentToS3(name, content)));
+    }
+
     @GetMapping("/active")
     @Operation(summary = "Get active email template")
     public ResponseEntity<ApiResponse<EmailTemplate>> getActive() {

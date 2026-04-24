@@ -126,7 +126,12 @@ export const suppressionApi = {
 export const templatesApi = {
   list: () => api.get("/templates"),
   get: (id: string) => api.get(`/templates/${id}`),
+  getActive: () => api.get("/templates/active"),
   content: (name: string) => api.get(`/templates/${name}/content`),
+  saveContent: (name: string, content: string) =>
+    api.put(`/templates/${name}/content`, { content }),
+  saveFields: (name: string, data: object) =>
+    api.put(`/templates/${name}/fields`, data),
   create: (data: object) => api.post("/templates", data),
   update: (id: string, data: object) => api.put(`/templates/${id}`, data),
   updateFields: (id: string, data: object) => api.put(`/templates/${id}/fields`, data),

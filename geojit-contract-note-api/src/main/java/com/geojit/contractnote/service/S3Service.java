@@ -173,6 +173,24 @@ public class S3Service {
     }
 
     /**
+     * Write arbitrary HTML content to a specific key in the template bucket.
+     * Used by the template editor to save edits back to S3.
+     */
+    public void writeTemplateContent(String key, String content) {
+        String bucket = appProperties.getAws().getS3().getTemplateBucket();
+        try {
+            byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentLength(bytes.length);
+            metadata.setContentType("text/html; charset=utf-8");
+            amazonS3.putObject(new PutObjectRequest(bucket, key, new ByteArrayInputStream(bytes), metadata));
+            log.info("Template written to S3 | bucket={} | key={}", bucket, key);
+        } catch (Exception e) {
+            throw new S3OperationException("Failed to write template to S3 | key=" + key + " | " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * Check whether the active template HTML file already exists in S3.
      * Used at startup to seed the bucket if empty.
      */

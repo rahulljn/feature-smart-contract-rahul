@@ -177,6 +177,7 @@ export interface EmailTemplate {
   bodyIntro?: string;
   bodyColor?: string;
   footerColor?: string;
+  logoUrl?: string;
 }
 
 export interface S3Template {
@@ -191,6 +192,7 @@ export interface TemplateFieldsRequest {
   subject: string;
   greetingText: string;
   bodyIntro: string;
+  logoUrl?: string;
   bodyColor: string;
   footerColor: string;
 }
