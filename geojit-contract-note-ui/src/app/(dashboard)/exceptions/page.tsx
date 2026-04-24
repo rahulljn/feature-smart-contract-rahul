@@ -155,7 +155,7 @@ export default function ExceptionsPage() {
     queryFn: () => jobsApi.list(0, 50),
   });
   const allJobs: Job[] = jobsRes?.data?.data?.content ?? [];
-  const jobs: Job[] = allJobs.filter((j: Job) => ["FAILED","PARTIAL","COMPLETED"].includes(j.status));
+  const jobs: Job[] = allJobs.filter((j: Job) => ["FAILED","PARTIAL","COMPLETED","PROCESSING","EMAILING","SPLITTING"].includes(j.status));
 
   useEffect(() => {
     if (!selectedJob && jobs.length > 0) {
