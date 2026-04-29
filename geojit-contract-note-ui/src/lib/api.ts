@@ -93,6 +93,12 @@ export const lambdaExceptionsApi = {
 export const dashboardApi = {
   metrics: (from?: string, to?: string) =>
     api.get("/dashboard/metrics", { params: { from: from || undefined, to: to || undefined } }),
+  getMonthlyVolume: (year: number) =>
+    api.get("/dashboard/monthly-volume", { params: { year } }),
+  getDailySuccessRate: (days: 30 | 90) =>
+    api.get("/dashboard/daily-success-rate", { params: { days } }),
+  getBounceBreakdown: () =>
+    api.get("/dashboard/bounce-breakdown"),
 };
 
 export const pipelineApi = {
@@ -137,6 +143,10 @@ export const templatesApi = {
   updateFields: (id: string, data: object) => api.put(`/templates/${id}/fields`, data),
   activate: (id: string) => api.post(`/templates/${id}/activate`),
   validate: (id: string) => api.post(`/templates/${id}/validate`),
+  sendTestEmail: (templateId: string, data: { recipients: string[]; partyCode?: string }) =>
+    api.post(`/templates/${templateId}/test`, data),
+  getTestHistory: (templateId: string) =>
+    api.get(`/templates/${templateId}/test-history`),
 };
 
 export const configApi = {
@@ -152,6 +162,16 @@ export const configApi = {
     api.post("/config/certificates/upload", form, { headers: { "Content-Type": "multipart/form-data" } }),
   sesStatistics: (startDate?: string, endDate?: string) =>
     api.get("/config/ses/statistics", { params: { startDate: startDate || undefined, endDate: endDate || undefined } }),
+  getActiveSesConfig: () => api.get("/config/ses/active"),
+  getBranding: () => api.get("/config/branding"),
+  updateBranding: (data: object) => api.put("/config/branding", data),
+  uploadLogo: (file: File) => {
+    const fd = new FormData(); fd.append("file", file);
+    return api.post("/config/branding/logo", fd, { headers: { "Content-Type": "multipart/form-data" } });
+  },
+  getCmsPages: () => api.get("/config/cms"),
+  updateCmsPage: (slug: string, data: { title: string; content: string }) =>
+    api.put(`/config/cms/${slug}`, data),
 };
 
 export const usersApi = {
@@ -160,4 +180,44 @@ export const usersApi = {
   create: (data: object) => api.post("/users", data),
   update: (id: string, data: object) => api.put(`/users/${id}`, data),
   deactivate: (id: string) => api.delete(`/users/${id}`),
+};
+
+export const alertsApi = {
+  getRules: () => api.get("/alerts/rules"),
+  createRule: (data: object) => api.post("/alerts/rules", data),
+  updateRule: (id: string, data: object) => api.put(`/alerts/rules/${id}`, data),
+  deleteRule: (id: string) => api.delete(`/alerts/rules/${id}`),
+  toggleRule: (id: string, isActive: boolean) =>
+    api.patch(`/alerts/rules/${id}/toggle`, { isActive }),
+  getHistory: (params: {
+    from?: string; to?: string; channel?: string;
+    status?: string; page?: number; size?: number;
+  }) => api.get("/alerts/history", { params }),
+  resendNotification: (id: string) => api.post(`/alerts/history/${id}/resend`),
+  getUnreadCount: () => api.get("/alerts/unread-count"),
+  markAllRead: () => api.post("/alerts/mark-all-read"),
+  getChannelConfig: () => api.get("/alerts/channels"),
+  updateChannelConfig: (data: object) => api.put("/alerts/channels", data),
+};
+
+export const opsApi = {
+  getTodaySummary: () => api.get("/ops/today-summary"),
+  getTodayJobs: () => api.get("/ops/today-jobs"),
+  getHealthStatus: () => api.get("/ops/health"),
+  getHourlyFailures: () => api.get("/ops/hourly-failures"),
+  getFailureDistribution: () => api.get("/ops/failure-distribution"),
+  getIssues: () => api.get("/ops/issues"),
+};
+
+export const analyticsApi = {
+  getEngagementSummary: (params: object) =>
+    api.get("/analytics/engagement/summary", { params }),
+  getEngagementTimeSeries: (params: object) =>
+    api.get("/analytics/engagement/timeseries", { params }),
+  getSegmentEngagement: (params: object) =>
+    api.get("/analytics/engagement/by-segment", { params }),
+  getHourHeatmap: (params: object) =>
+    api.get("/analytics/engagement/heatmap", { params }),
+  getCustomerEngagement: (params: object) =>
+    api.get("/analytics/engagement/customers", { params }),
 };

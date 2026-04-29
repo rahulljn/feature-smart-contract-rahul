@@ -4,169 +4,210 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
-import { useState } from "react";
-import { authApi } from "@/lib/api";
-import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { alertsApi } from "@/lib/api";
+
+const USE_MOCK = true;
 
 interface NavItem {
   href: string;
   label: string;
   icon: string;
-  badgeQuery?: boolean;
   adminOnly?: boolean;
+  opsAndAdmin?: boolean;
+  showUnreadBadge?: boolean;
 }
 
-const navSections: { name: string; items: NavItem[] }[] = [
+interface NavSection {
+  name: string;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
   {
-    name: "Operate",
+    name: "OVERVIEW",
     items: [
-      { href: "/dashboard",  label: "Dashboard",    icon: "grid_view" },
-      { href: "/process",    label: "Process File", icon: "upload_file" },
-      { href: "/jobs",       label: "Runs & Jobs",  icon: "hub" },
-      { href: "/clients",    label: "Client 360",   icon: "groups" },
-      { href: "/exceptions", label: "Exceptions",   icon: "error" },
-      { href: "/resend",     label: "Resend",       icon: "forward_to_inbox" },
+      { href: "/dashboard",     label: "Dashboard",      icon: "dashboard" },
+      { href: "/ops-dashboard", label: "Ops Dashboard",  icon: "monitor_heart", opsAndAdmin: true },
     ],
   },
   {
-    name: "Configure",
+    name: "PIPELINE",
     items: [
-      { href: "/templates",    label: "Templates",        icon: "mail" },
-      { href: "/ses-config",   label: "Email Config",     icon: "settings" },
-      { href: "/certificates", label: "Certificates",     icon: "verified" },
-{ href: "/users",        label: "Users & Roles",    icon: "manage_accounts", adminOnly: true },
+      { href: "/process", label: "Upload & Process", icon: "upload" },
+      { href: "/jobs",    label: "Jobs",             icon: "work" },
+      { href: "/resend",  label: "Bulk Resend",      icon: "forward_to_inbox" },
+    ],
+  },
+  {
+    name: "CONFIGURATION",
+    items: [
+      { href: "/templates",       label: "Templates",      icon: "description" },
+      { href: "/clients",         label: "Client Lookup",  icon: "person_search" },
+      { href: "/ses-config",      label: "SES Config",     icon: "mail" },
+      { href: "/certificates",    label: "Certificates",   icon: "verified_user" },
+    ],
+  },
+  {
+    name: "SYSTEM",
+    items: [
+      { href: "/exceptions", label: "Exceptions",  icon: "bug_report" },
+      { href: "/users",      label: "Users",       icon: "group",         adminOnly: true },
+      { href: "/audit",      label: "Audit Log",   icon: "history",       adminOnly: true },
+      { href: "/alerts",     label: "Alerts",      icon: "notifications", opsAndAdmin: true, showUnreadBadge: true },
+      { href: "/settings",   label: "Settings",    icon: "settings",      adminOnly: true },
     ],
   },
 ];
 
 export function Sidebar() {
-  const pathname   = usePathname();
-  const { user, clearUser } = useAuthStore();
-  const router     = useRouter();
-  const [collapsed, setCollapsed] = useState(false);
-  const isAdmin    = user?.role === "ADMIN";
+  const pathname = usePathname();
+  const { user } = useAuthStore();
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    OVERVIEW: true,
+    PIPELINE: true,
+    CONFIGURATION: true,
+    SYSTEM: true,
+  });
 
-  const handleLogout = async () => {
-    try { await authApi.logout(); } catch { /* ignore */ }
-    clearUser();
-    document.cookie = "auth-token=; Max-Age=0; path=/";
-    router.push("/login");
-    toast.success("Logged out successfully");
-  };
+  const isAdmin = user?.role === "ADMIN";
+  const isOpsOrAdmin = user?.role === "ADMIN" || user?.role === "OPS_MANAGER";
 
-  const initials = user?.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) ?? "?";
-  const roleLabel = user?.role === "ADMIN" ? "Admin" : user?.role === "OPS_MANAGER" ? "Ops Manager" : "Viewer";
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchUnread() {
+      try {
+        if (USE_MOCK) {
+          if (!cancelled) setUnreadCount(3);
+          return;
+        }
+        const res = await alertsApi.getUnreadCount();
+        const count = res?.data?.data ?? res?.data ?? 0;
+        if (!cancelled) setUnreadCount(typeof count === "number" ? count : 0);
+      } catch {
+        // silently fail
+      }
+    }
+    fetchUnread();
+    const id = setInterval(fetchUnread, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  function toggleSection(name: string) {
+    setOpenSections((prev) => ({ ...prev, [name]: !prev[name] }));
+  }
 
   return (
-    <aside
-      className={cn(
-        "flex flex-col h-full bg-[#00174b] text-white transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
-      )}
-    >
-      {/* Brand */}
-      <div className="flex items-center justify-between px-4 py-4 mb-1">
-        <div className={cn("flex items-center gap-2.5 min-w-0 flex-1", collapsed && "justify-center")}>
-          <div className="w-9 h-9 rounded-lg bg-white/10 backdrop-blur flex items-center justify-center border border-white/15 flex-shrink-0">
-            <span className="material-symbols-outlined text-blue-300 text-xl">account_balance</span>
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <div className="text-white font-bold text-[13px] leading-tight headline">Contract Note</div>
-              <div className="text-blue-300/70 text-[9px] uppercase tracking-widest font-semibold mt-0.5">Geojit Ops Console</div>
-            </div>
-          )}
+    <aside className="flex flex-col h-full bg-[#00174b] text-white flex-shrink-0 w-44">
+      {/* Logo area */}
+      <div className="flex items-center gap-2.5 p-4 border-b border-white/10">
+        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+          <span className="material-symbols-outlined text-white text-[18px]">account_balance</span>
         </div>
-        <button
-          onClick={() => setCollapsed(c => !c)}
-          className="text-slate-400 hover:text-white p-1.5 rounded-lg transition-colors flex-shrink-0"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <span className="material-symbols-outlined text-xl">menu</span>
-        </button>
+        <span className="text-sm font-semibold text-white leading-tight truncate">ContractNote Pro</span>
       </div>
 
-      {/* Nav Sections */}
-      <nav className="flex-1 overflow-y-auto pb-4 space-y-0.5">
-        {navSections.map(section => {
-          const visibleItems = section.items.filter(item => !item.adminOnly || isAdmin);
+      {/* Search bar */}
+      <div className="px-3 pt-3 pb-1">
+        <div className="relative">
+          <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40 text-[16px]">
+            search
+          </span>
+          <input
+            type="text"
+            placeholder="Search jobs, templates…"
+            className="w-full bg-white/10 rounded-lg pl-8 pr-3 py-1.5 text-sm text-white/70 placeholder-white/40 outline-none focus:bg-white/15 transition-colors"
+          />
+        </div>
+      </div>
+
+      {/* Nav sections */}
+      <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0">
+        {navSections.map((section) => {
+          const visibleItems = section.items.filter(
+            (item) =>
+              (!item.adminOnly || isAdmin) &&
+              (!item.opsAndAdmin || isOpsOrAdmin),
+          );
           if (visibleItems.length === 0) return null;
+          const isOpen = openSections[section.name] ?? true;
 
           return (
-            <div key={section.name}>
-              {!collapsed && (
-                <div className="px-4 pt-1 pb-0.5 text-[9px] font-bold text-slate-600 uppercase tracking-widest">
+            <div key={section.name} className="mb-1">
+              <button
+                onClick={() => toggleSection(section.name)}
+                className="flex items-center justify-between w-full px-2 pt-3 pb-1 group"
+              >
+                <span className="text-white/50 text-[10px] uppercase tracking-widest font-semibold">
                   {section.name}
+                </span>
+                <span
+                  className={cn(
+                    "material-symbols-outlined text-white/30 text-[14px] transition-transform duration-200",
+                    isOpen ? "rotate-0" : "-rotate-90",
+                  )}
+                >
+                  expand_more
+                </span>
+              </button>
+
+              {isOpen && (
+                <div className="space-y-0.5">
+                  {visibleItems.map(({ href, label, icon, showUnreadBadge }) => {
+                    const active =
+                      pathname === href || pathname.startsWith(href + "/");
+                    const badge =
+                      showUnreadBadge && unreadCount > 0 ? unreadCount : 0;
+                    return (
+                      <Link
+                        key={href}
+                        href={href}
+                        className={cn(
+                          "flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-all duration-150",
+                          active
+                            ? "bg-white/15 text-white font-medium"
+                            : "text-white/70 hover:bg-white/10 hover:text-white",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "material-symbols-outlined text-[18px] flex-shrink-0",
+                            active ? "text-white" : "text-white/50",
+                          )}
+                        >
+                          {icon}
+                        </span>
+                        <span className="truncate flex-1 text-[0.8rem]">{label}</span>
+                        {badge > 0 && (
+                          <span className="ml-auto text-[9px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center flex-shrink-0">
+                            {badge > 99 ? "99+" : badge}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
                 </div>
               )}
-              <div className="space-y-0">
-                {visibleItems.map(({ href, label, icon, badgeQuery }) => {
-                  const active = pathname === href || pathname.startsWith(href + "/");
-                  const badge: string | undefined = undefined; // badgeQuery reserved for future use
-                  return (
-                    <Link
-                      key={href}
-                      href={href}
-                      title={collapsed ? label : undefined}
-                      className={cn(
-                        "flex items-center gap-[0.7rem] py-[0.55rem] text-[0.8125rem] font-medium transition-all duration-150",
-                        collapsed ? "px-0 justify-center mx-[0.35rem] rounded-[0.625rem]" : "px-[0.85rem] mx-[0.6rem] rounded-[0.625rem] mb-[0.15rem]",
-                        active
-                          ? "bg-[rgba(73,124,255,0.18)] text-white font-semibold"
-                          : "text-[#94a3b8] hover:text-white hover:bg-white/[0.06]"
-                      )}
-                    >
-                      <span className={cn(
-                        "material-symbols-outlined text-xl flex-shrink-0",
-                        active ? "text-[#93c5fd]" : ""
-                      )}>
-                        {icon}
-                      </span>
-                      {!collapsed && (
-                        <>
-                          <span className="truncate">{label}</span>
-                          {badge && (
-                            <span className="ml-auto text-[9px] font-bold bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded">
-                              {badge}
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
             </div>
           );
         })}
       </nav>
 
-      {/* User Card */}
-      <div className="border-t border-white/10 p-3">
-        <div className={cn(
-          "flex items-center gap-2.5 p-2 rounded-xl bg-white/5",
-          collapsed && "justify-center"
-        )}>
-          <div className="w-9 h-9 rounded-full bg-blue-500/25 flex items-center justify-center text-blue-200 font-bold text-[11px] flex-shrink-0">
-            {initials}
-          </div>
-          {!collapsed && (
-            <>
-              <div className="overflow-hidden flex-1 min-w-0">
-                <div className="text-white text-xs font-semibold truncate">{user?.name}</div>
-                <div className="text-slate-400 text-[10px] truncate">{roleLabel}</div>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="text-slate-500 hover:text-rose-400 transition-colors flex-shrink-0"
-                title="Sign out"
-              >
-                <span className="material-symbols-outlined text-base">logout</span>
-              </button>
-            </>
-          )}
-        </div>
+      {/* Bottom links */}
+      <div className="mt-auto border-t border-white/10 px-3 py-3 flex gap-4">
+        <Link
+          href="/privacy-policy"
+          className="text-white/50 text-xs hover:text-white/80 transition-colors"
+        >
+          Privacy Policy
+        </Link>
+        <Link
+          href="/about-us"
+          className="text-white/50 text-xs hover:text-white/80 transition-colors"
+        >
+          About Us
+        </Link>
       </div>
     </aside>
   );

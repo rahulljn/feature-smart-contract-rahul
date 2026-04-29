@@ -58,10 +58,10 @@ export default function ClientsPage() {
   }, {});
   const clients = Object.values(grouped);
 
-  const allCodes: string[] = useMemo(() => {
-    const raw = allCodesData?.data?.data;
-    return Array.isArray(raw) ? raw : [];
-  }, [allCodesData]);
+   const allCodes: string[] = useMemo(() => {
+     const raw = allCodesData?.data;
+     return Array.isArray(raw) ? raw : [];
+   }, [allCodesData]);
 
   const suggestions: string[] = useMemo(() => {
     if (!search.trim()) return allCodes.slice(0, 10);

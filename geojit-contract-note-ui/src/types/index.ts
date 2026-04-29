@@ -322,6 +322,155 @@ export interface ValidationResult {
   invalidReasons?: Record<string, number>; // e.g. { "H": 120, "E(got=6)": 45, "NO_HEADER": 10 }
 }
 
+// ─── Alerts ───────────────────────────────────────────────────────────
+export type AlertTriggerEvent =
+  | "PFX_EXPIRY_WARNING" | "PFX_EXPIRY_CRITICAL" | "JOB_FAILED"
+  | "HIGH_BOUNCE_RATE" | "PIPELINE_STUCK" | "EMAIL_QUOTA_NEAR_LIMIT"
+  | "SES_CONFIG_DEACTIVATED";
+
+export type AlertChannel = "EMAIL" | "SMS" | "WHATSAPP";
+
+export interface AlertRule {
+  id: string;
+  name: string;
+  triggerEvent: AlertTriggerEvent;
+  thresholdValue?: number;
+  channels: AlertChannel[];
+  recipients: { channel: AlertChannel; value: string }[];
+  includeDeepLink: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlertNotification {
+  id: string;
+  ruleId: string;
+  ruleName: string;
+  triggeredBy: string;
+  channel: AlertChannel;
+  recipient: string;
+  status: "SENT" | "FAILED" | "PENDING";
+  sentAt: string;
+  jobId?: string;
+}
+
+// ─── Dashboard Charts ─────────────────────────────────────────────────
+export interface MonthlyVolumeData {
+  month: string;
+  delivered: number;
+  bounced: number;
+  failed: number;
+}
+
+export interface DailySuccessRate {
+  date: string;
+  rate: number;
+}
+
+export interface JobBounceBreakdown {
+  jobName: string;
+  hard: number;
+  soft: number;
+  complaint: number;
+}
+
+// ─── Ops Dashboard ────────────────────────────────────────────────────
+export interface OpsTodaySummary {
+  total: number;
+  completed: number;
+  inProgress: number;
+  failed: number;
+}
+
+export interface OpsHealthStatus {
+  sesQuotaUsed: number;
+  sesQuotaMax: number;
+  activeSesConfig: { name: string; fromEmail: string } | null;
+  pfxDaysRemaining: number;
+  lambdaErrorsLastHour: number;
+  jobsStuckCount: number;
+  highBounceJobs: { jobId: string; fileName: string; bounceRate: number }[];
+  failedCustomersToday: number;
+  invalidRecordsToday: number;
+}
+
+// ─── Email Analytics ──────────────────────────────────────────────────
+export interface EngagementSummary {
+  totalSent: number;
+  openRate: number;
+  clickRate: number;
+  unsubscribeRate: number;
+  openRateTrend: number;
+  clickRateTrend: number;
+  sparklineOpens: number[];
+  sparklineClicks: number[];
+}
+
+export interface EngagementTimeSeries {
+  date: string;
+  openRate: number;
+  clickRate: number;
+  bounceRate: number;
+}
+
+export interface SegmentEngagement {
+  segment: string;
+  openRate: number;
+  clickRate: number;
+  sent: number;
+}
+
+export interface HourHeatmapCell {
+  day: number;
+  hour: number;
+  clickRate: number;
+}
+
+export interface CustomerEngagement {
+  partyCode: string;
+  email: string;
+  totalSent: number;
+  opened: number;
+  clicked: number;
+  openRate: number;
+  clickRate: number;
+  lastOpenedAt?: string;
+  lastClickedAt?: string;
+  bounceStatus: "NEVER" | "SOFT" | "HARD";
+}
+
+// ─── Branding & CMS ───────────────────────────────────────────────────
+export interface BrandingConfig {
+  appName: string;
+  primaryColor: string;
+  accentColor: string;
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  updatedAt: string;
+}
+
+export interface CmsPage {
+  id: string;
+  slug: "privacy-policy" | "about-us";
+  title: string;
+  content: string;
+  lastUpdatedAt: string;
+  lastUpdatedBy: string;
+}
+
+// ─── Template Test ────────────────────────────────────────────────────
+export interface TemplateTestResult {
+  id: string;
+  templateId: string;
+  sentTo: string[];
+  status: "SENT" | "FAILED";
+  errorMessage?: string;
+  partyCodeUsed?: string;
+  sentByName: string;
+  sentAt: string;
+}
+
 // ─── SES Statistics ──────────────────────────────────────────────────
 export interface SesDataPoint {
   timestamp: string;
@@ -341,4 +490,79 @@ export interface SesStatistics {
   remainingSends: number;
   quotaUsedPercent: number;
   dataPoints: SesDataPoint[];
+}
+
+// ─── Alert History ────────────────────────────────────────────────────
+export type AlertSeverity = "CRITICAL" | "WARNING" | "INFO";
+
+export interface AlertHistoryItem {
+  id: string;
+  title: string;
+  message: string;
+  severity: AlertSeverity;
+  isRead: boolean;
+  createdAt: string;
+  jobId?: string;
+  certName?: string;
+}
+
+// ─── Alert Channel Configuration ─────────────────────────────────────
+export interface EmailChannelConfig {
+  enabled: boolean;
+  sesConfigSetName?: string;
+  fromAddress?: string;
+}
+
+export interface SmsChannelConfig {
+  enabled: boolean;
+  provider?: string;
+  accountSid?: string;
+  authToken?: string;
+  fromNumber?: string;
+}
+
+export interface WhatsAppChannelConfig {
+  enabled: boolean;
+  provider?: string;
+  accountSid?: string;
+  authToken?: string;
+  fromNumber?: string;
+}
+
+export interface ChannelConfig {
+  email: EmailChannelConfig;
+  sms: SmsChannelConfig;
+  whatsApp: WhatsAppChannelConfig;
+}
+
+// ─── Ops Dashboard ────────────────────────────────────────────────────
+export interface OpsIssue {
+  id: string;
+  name: string;
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  count: number;
+  description: string;
+}
+
+export interface OpsHourlyFailure {
+  hour: number;
+  appFailures: number;
+  infraFailures: number;
+}
+
+export interface OpsFailureDistribution {
+  name: string;
+  value: number;
+  color: string;
+}
+
+export interface OpsTodayJob {
+  jobId: string;
+  segment: string;
+  records: number;
+  status: string;
+  duration?: string;
+  pdfFail: number;
+  emailFail: number;
+  delivered: number;
 }

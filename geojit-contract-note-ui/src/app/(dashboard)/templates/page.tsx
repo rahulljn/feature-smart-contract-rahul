@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { templatesApi } from "@/lib/api";
-import type { S3Template, TemplateFieldsRequest } from "@/types";
+import type { S3Template, TemplateFieldsRequest, TemplateTestResult } from "@/types";
 import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, fmtDateTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth";
 
@@ -88,7 +88,7 @@ const FIELD_LABELS: Record<string, string> = {
   logoUrl: "Logo URL", bodyColor: "Body Color", footerColor: "Footer Color",
 };
 
-type TabId = "fields" | "html" | "preview";
+type TabId = "fields" | "html" | "preview" | "test";
 
 const DEFAULT_GREETING = "Warm Greetings from Geojit Investments Ltd !";
 const DEFAULT_INTRO    = "We hope your experience with Geojit Investments Ltd has been pleasant. We are herewith sending you your digitally signed contract note (PDF Document).";
@@ -139,6 +139,7 @@ export default function TemplatesPage() {
     queryFn: () => templatesApi.getActive(),
     retry: false,
     select: (res) => res?.data?.data as {
+      templateId?: string;
       subject?: string; greetingText?: string; bodyIntro?: string;
       logoUrl?: string; bodyColor?: string; footerColor?: string;
     } | null,
@@ -195,10 +196,40 @@ export default function TemplatesPage() {
     setFooterColor(src?.footerColor || "#666666");
   }
 
+  // ── Send Test state ──────────────────────────────────────────────────────
+  const [testRecipients, setTestRecipients] = useState("");
+  const [testPartyCode, setTestPartyCode]   = useState("");
+
+  const testTemplateId = activeDbTemplate?.templateId;
+
+  const { data: testHistoryData, refetch: refetchHistory } = useQuery({
+    queryKey: ["template-test-history", testTemplateId],
+    queryFn: () => templatesApi.getTestHistory(testTemplateId!),
+    enabled: !!testTemplateId && activeTab === "test",
+    select: (res) => res?.data?.data as TemplateTestResult[],
+  });
+
+  const { mutate: sendTest, isPending: sendingTest } = useMutation({
+    mutationFn: () => {
+      if (!testTemplateId) throw new Error("No active template found");
+      const recipients = testRecipients.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+      if (recipients.length === 0) throw new Error("Enter at least one recipient email");
+      return templatesApi.sendTestEmail(testTemplateId, { recipients, partyCode: testPartyCode || undefined });
+    },
+    onSuccess: () => {
+      toast.success("Test email sent");
+      setTestRecipients("");
+      setTestPartyCode("");
+      refetchHistory();
+    },
+    onError: (e: unknown) => toast.error((e as Error).message || "Send test failed"),
+  });
+
   const TABS: { id: TabId; label: string; icon: string }[] = [
     { id: "fields",  label: "Edit Fields", icon: "edit" },
     { id: "html",    label: "Full HTML",   icon: "code" },
     { id: "preview", label: "Preview",     icon: "visibility" },
+    { id: "test",    label: "Send Test",   icon: "send" },
   ];
 
   if (isLoading) {
@@ -376,7 +407,7 @@ export default function TemplatesPage() {
               <div>
                 <label className="field-label">
                   <span className={cn("px-1.5 py-0.5 rounded border text-[10px] font-bold mr-1.5", FIELD_COLORS.greetingText)}>Greeting Text</span>
-                  Opening line shown after "Dear [NAME],"
+                  Opening line shown after &quot;Dear [NAME],&quot;
                 </label>
                 <input type="text" value={greetingText} onChange={e => setGreetingText(e.target.value)}
                   placeholder={DEFAULT_GREETING}
@@ -503,6 +534,89 @@ export default function TemplatesPage() {
                   title="Template preview"
                 />
               </div>
+            </div>
+          )}
+
+          {/* Tab: Send Test */}
+          {activeTab === "test" && (
+            <div className="p-6 space-y-6">
+              {!testTemplateId ? (
+                <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                  <span className="material-symbols-outlined text-amber-500 text-xl flex-shrink-0">warning</span>
+                  <div>
+                    <div className="text-sm font-semibold text-amber-800">No active template found</div>
+                    <div className="text-[12px] text-amber-700 mt-0.5">Activate a template first to send test emails. Use the <strong>Edit Fields</strong> tab to save changes, then activate it from the Templates list.</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Send form */}
+                  <div className="space-y-4">
+                    <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-[12px] text-blue-800 flex items-start gap-2">
+                      <span className="material-symbols-outlined text-base flex-shrink-0">info</span>
+                      <span>Sends a real email via SES using the <strong>active template</strong>. The [NAME] placeholder will be replaced with sample data or the party code&apos;s name if provided.</span>
+                    </div>
+                    <div>
+                      <label className="field-label">Recipient email addresses <span className="text-red-500">*</span></label>
+                      <textarea
+                        rows={3}
+                        value={testRecipients}
+                        onChange={e => setTestRecipients(e.target.value)}
+                        placeholder={"user@example.com\nops@geojit.com"}
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm mono focus:outline-none focus:ring-2 focus:ring-[#497cff]/20 resize-y"
+                      />
+                      <div className="text-[10px] text-slate-400 mt-1">One per line or comma-separated</div>
+                    </div>
+                    <div>
+                      <label className="field-label">Party code <span className="text-slate-400 font-normal">(optional)</span></label>
+                      <input
+                        type="text"
+                        value={testPartyCode}
+                        onChange={e => setTestPartyCode(e.target.value)}
+                        placeholder="8000274"
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm mono focus:outline-none focus:ring-2 focus:ring-[#497cff]/20"
+                      />
+                      <div className="text-[10px] text-slate-400 mt-1">Uses that client&apos;s name for [NAME] replacement, or &quot;Test User&quot; if blank</div>
+                    </div>
+                    <button
+                      onClick={() => sendTest()}
+                      disabled={sendingTest || !testRecipients.trim()}
+                      className="px-5 py-2.5 bg-[#00174b] text-white rounded-xl text-sm font-bold hover:bg-[#003ea8] flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {sendingTest ? <Loader2 className="animate-spin h-4 w-4" /> : <span className="material-symbols-outlined text-base">send</span>}
+                      {sendingTest ? "Sending…" : "Send Test Email"}
+                    </button>
+                  </div>
+
+                  {/* Test history */}
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Send History</div>
+                    {!testHistoryData || testHistoryData.length === 0 ? (
+                      <div className="text-center text-slate-400 text-[12px] py-8 border border-dashed border-slate-200 rounded-xl">
+                        No test emails sent yet
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[360px] overflow-y-auto">
+                        {testHistoryData.map(t => (
+                          <div key={t.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className={cn("pill text-[10px]", t.status === "SENT" ? "pill-ok" : "pill-err")}>{t.status}</span>
+                              <span className="text-[11px] text-slate-500 mono flex-1 truncate">{t.sentTo.join(", ")}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                              <span>by {t.sentByName}</span>
+                              <span>·</span>
+                              <span>{fmtDateTime(t.sentAt)}</span>
+                              {t.partyCodeUsed && <><span>·</span><span className="mono">code: {t.partyCodeUsed}</span></>}
+                            </div>
+                            {t.errorMessage && <div className="text-[10px] text-rose-600 mt-1">{t.errorMessage}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

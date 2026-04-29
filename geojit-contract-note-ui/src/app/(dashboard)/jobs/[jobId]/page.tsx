@@ -1,5 +1,7 @@
 "use client";
 
+const USE_MOCK = true;
+
 import { use, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { jobsApi, pipelineApi } from "@/lib/api";
@@ -169,24 +171,69 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
   const qc = useQueryClient();
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState("ov");
+
+  const MOCK_JOB = {
+    jobId: jobId || "JOB-0428-01",
+    fileName: "EQUITY_20260429.txt",
+    segmentType: "EQUITY-COMBINEMARGIN",
+    status: "COMPLETED",
+    totalRecords: 28200,
+    processedCount: 28200,
+    pdfGeneratedCount: 28058,
+    emailSentCount: 28058,
+    emailDeliveredCount: 26100,
+    bounceCount: 640,
+    emailFailedCount: 318,
+    hardBounceCount: 420,
+    softBounceCount: 220,
+    failedCount: 318,
+    pdfFailedCount: 142,
+    invalidRecordCount: 0,
+    emailSkippedCount: 0,
+    progressPercent: 100,
+    uploadedAt: new Date().toISOString(),
+    tradeDate: "2026-04-29",
+    uploadedBy: { name: "admin@geojit.com" },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const MOCK_CUSTOMERS = [
+    { id: 1, partyCode: "ZYR175", email: "z***@example.com", pdfStatus: "GENERATED", emailStatus: "DELIVERED", bounceType: null, bounceReason: null, emailSentAt: new Date().toISOString(), deliveredAt: new Date().toISOString(), bouncedAt: null },
+    { id: 2, partyCode: "ACC201", email: "a***@example.com", pdfStatus: "GENERATED", emailStatus: "BOUNCED",   bounceType: "Permanent", bounceReason: "Address does not exist", emailSentAt: new Date().toISOString(), deliveredAt: null, bouncedAt: new Date().toISOString() },
+    { id: 3, partyCode: "GEO445", email: "g***@example.com", pdfStatus: "FAILED",    emailStatus: "FAILED",    bounceType: null, bounceReason: "PDF generation timed out", emailSentAt: null, deliveredAt: null, bouncedAt: null },
+  ];
+  const [bounceTypeFilter, setBounceTypeFilter] = useState<"ALL" | "Permanent" | "Transient">("ALL");
   const [page, setPage] = useState(0);
   const [liveEvents, setLiveEvents] = useState<PipelineEvent[]>([]);
   const [splitProgress, setSplitProgress] = useState<number | null>(null);
   const sseRef = useRef<EventSource | null>(null);
   const invalidateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { data: jobRes } = useQuery({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: jobRes } = useQuery<any>({
     queryKey: ["job", jobId],
-    queryFn: () => jobsApi.get(jobId),
+    queryFn: () => USE_MOCK
+      ? Promise.resolve({ data: { data: MOCK_JOB } })
+      : jobsApi.get(jobId),
+    initialData: USE_MOCK ? { data: { data: MOCK_JOB } } : undefined,
   });
 
-  const { data: custRes, isLoading: loadingCust } = useQuery({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: custRes, isLoading: loadingCust } = useQuery<any>({
     queryKey: ["job-customers", jobId, page],
-    queryFn: () => jobsApi.customers(jobId, page, 50),
+    queryFn: () => USE_MOCK
+      ? Promise.resolve({ data: { data: { content: MOCK_CUSTOMERS, totalPages: 1, totalElements: MOCK_CUSTOMERS.length } } })
+      : jobsApi.customers(jobId, page, 50),
+    initialData: USE_MOCK ? { data: { data: { content: MOCK_CUSTOMERS, totalPages: 1, totalElements: MOCK_CUSTOMERS.length } } } : undefined,
   });
 
-  const { data: eventsRes } = useQuery({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: eventsRes } = useQuery<any>({
     queryKey: ["pipeline-events", jobId],
-    queryFn: () => pipelineApi.events(jobId),
+    queryFn: () => USE_MOCK
+      ? Promise.resolve({ data: { data: [] } })
+      : pipelineApi.events(jobId),
+    initialData: USE_MOCK ? { data: { data: [] } } : undefined,
   });
 
   const job: Job | undefined = jobRes?.data?.data;
@@ -319,16 +366,16 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
                   <div className="text-[26px] font-extrabold mono text-emerald-600 leading-none">{snsDelivered.toLocaleString()}</div>
                   <div className="text-[10px] text-slate-400 mt-1.5">Confirmed by SNS delivery receipt</div>
                 </div>
-                <div className="card p-4">
-                  <div className="text-[10px] text-orange-600 uppercase font-bold tracking-wider mb-1">Email failed</div>
+                <Link href={emailFailed > 0 ? "/exceptions" : "#"} className={cn("card p-4 block", emailFailed > 0 ? "hover:bg-orange-50 cursor-pointer transition-colors" : "")}>
+                  <div className="text-[10px] text-orange-600 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">Email failed {emailFailed > 0 && <span className="material-symbols-outlined text-[11px] text-orange-400">open_in_new</span>}</div>
                   <div className="text-[26px] font-extrabold mono text-orange-600 leading-none">{emailFailed.toLocaleString()}</div>
                   <div className="text-[10px] text-slate-400 mt-1.5">No address or send error — never reached SES</div>
-                </div>
-                <div className="card p-4">
-                  <div className="text-[10px] text-amber-600 uppercase font-bold tracking-wider mb-1">Bounced</div>
+                </Link>
+                <Link href={bounced > 0 ? `/resend?jobId=${jobId}&status=BOUNCED` : "#"} className={cn("card p-4 block", bounced > 0 ? "hover:bg-amber-50 cursor-pointer transition-colors" : "")}>
+                  <div className="text-[10px] text-amber-600 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">Bounced {bounced > 0 && <span className="material-symbols-outlined text-[11px] text-amber-400">open_in_new</span>}</div>
                   <div className="text-[26px] font-extrabold mono text-amber-600 leading-none">{bounced.toLocaleString()}</div>
                   <div className="text-[10px] text-slate-400 mt-1.5">Sent to SES · rejected by mail server</div>
-                </div>
+                </Link>
                 <div className="card p-4">
                   <div className="text-[10px] text-rose-600 uppercase font-bold tracking-wider mb-1">Invalid records</div>
                   <div className="text-[26px] font-extrabold mono text-rose-600 leading-none">{invalid.toLocaleString()}</div>
@@ -478,10 +525,10 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
                 {/* Failed branch — from PDF (NX[2]=406) curved up-right */}
                 <path d={`M 406 ${NY - NR} Q 406 65 506 65`} fill="none" stroke="#f87171" strokeWidth="1.5" strokeDasharray="4 4" />
                 <foreignObject x="510" y="48" width="120" height="26">
-                  <div style={{ display:"flex", alignItems:"center", gap:3, padding:"2px 8px", borderRadius:999, fontSize:11, fontWeight:700, background:"#fff1f2", border:"1px solid #fecaca", color:"#dc2626", whiteSpace:"nowrap" }}>
+                  <a href="/exceptions" style={{ display:"flex", alignItems:"center", gap:3, padding:"2px 8px", borderRadius:999, fontSize:11, fontWeight:700, background:"#fff1f2", border:"1px solid #fecaca", color:"#dc2626", whiteSpace:"nowrap", textDecoration:"none" }}>
                     <span className="material-symbols-outlined" style={{ fontSize:11 }}>cancel</span>
                     Failed <span style={{ fontWeight:800, marginLeft:2 }}>{fmtN(pdfFailed)}</span>
-                  </div>
+                  </a>
                 </foreignObject>
 
                 {/* Pending branch — from Email (NX[3]=574) curved up-right */}
@@ -634,12 +681,22 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
         <div className="p-6 space-y-4">
           {bounceCount > 0 ? (
             <>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <div className="text-sm font-bold text-slate-900">{bounceCount} email address{bounceCount !== 1 ? "es" : ""} rejected by recipient mail server</div>
                   <div className="text-[11px] text-slate-500 mt-0.5">These clients did not receive their contract note. Update their email address in Client 360, then resend.</div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                  <div className="flex gap-1">
+                    {(["ALL", "Permanent", "Transient"] as const).map(f => (
+                      <button key={f} onClick={() => setBounceTypeFilter(f)}
+                        className={cn("px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors",
+                          bounceTypeFilter === f ? "bg-[#00174b] text-white border-[#00174b]" : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                        )}>
+                        {f}
+                      </button>
+                    ))}
+                  </div>
                   <button
                     onClick={() => downloadCsv(`bounces-${jobId.slice(0,8)}.csv`,
                       ["Client code","Email address","Bounce reason"],
@@ -662,7 +719,9 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
                     </tr>
                   </thead>
                   <tbody>
-                    {bounceCustomers.map(c => (
+                    {bounceCustomers
+                      .filter(c => bounceTypeFilter === "ALL" || (bounceTypeFilter === "Permanent" ? c.bounceType?.toLowerCase().includes("permanent") : !c.bounceType?.toLowerCase().includes("permanent")))
+                      .map(c => (
                       <tr key={c.id} className="t-row">
                         <td className="px-5 py-3 text-[12px] font-bold text-slate-800 mono">{normaliseCode(c.partyCode)}</td>
                         <td className="px-5 py-3 text-[11px] text-slate-600 mono">{c.email || "—"}</td>

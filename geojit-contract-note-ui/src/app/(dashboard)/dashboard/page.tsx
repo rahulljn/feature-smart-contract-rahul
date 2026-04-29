@@ -1,397 +1,423 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { dashboardApi } from "@/lib/api";
-import type { DashboardMetrics } from "@/types";
-import { Loader2 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/auth";
-import { cn, toUtcDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { SparklineChart } from "@/components/ui/sparkline";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
+  ComposedChart, Area, Line, CartesianGrid,
+} from "recharts";
 
-const statusMeta: Record<string, { bg: string; text: string; dot: string }> = {
-  COMPLETED:  { bg: "bg-[#ecfdf5]",  text: "text-[#047857]",  dot: "bg-[#10b981]" },
-  PROCESSING: { bg: "bg-[#eff6ff]",  text: "text-[#1d4ed8]",  dot: "bg-[#3b82f6] animate-pulse" },
-  EMAILING:   { bg: "bg-[#fffbeb]",  text: "text-[#b45309]",  dot: "bg-[#f59e0b]" },
-  SPLITTING:  { bg: "bg-[#f3e8ff]",  text: "text-[#6d28d9]",  dot: "bg-[#a855f7] animate-pulse" },
-  FAILED:     { bg: "bg-[#fef2f2]",  text: "text-[#b91c1c]",  dot: "bg-[#ef4444]" },
-  PARTIAL:    { bg: "bg-[#fff7ed]",  text: "text-[#92400e]",  dot: "bg-[#f97316]" },
-  VALIDATING: { bg: "bg-[#f8fafc]",  text: "text-[#475569]",  dot: "bg-[#64748b]" },
+const USE_MOCK = true;
+
+// ─── Mock data ────────────────────────────────────────────────────────────────
+const MOCK_METRICS = {
+  totalCustomers: 28200,
+  emailSentCount: 27560,
+  emailDeliveredCount: 26190,
+  failedCount: 318,
+  pdfGeneratedCount: 27800,
+  emailBouncedCount: 640,
 };
 
+const MOCK_MONTHLY = [
+  { month: "Jan", delivered: 22400, bounced: 580, failed: 290 },
+  { month: "Feb", delivered: 24100, bounced: 620, failed: 310 },
+  { month: "Mar", delivered: 21800, bounced: 540, failed: 260 },
+  { month: "Apr", delivered: 25300, bounced: 710, failed: 350 },
+  { month: "May", delivered: 23600, bounced: 590, failed: 280 },
+  { month: "Jun", delivered: 26100, bounced: 680, failed: 320 },
+  { month: "Jul", delivered: 24800, bounced: 640, failed: 300 },
+  { month: "Aug", delivered: 25900, bounced: 720, failed: 380 },
+  { month: "Sep", delivered: 22700, bounced: 560, failed: 270 },
+  { month: "Oct", delivered: 27100, bounced: 750, failed: 400 },
+  { month: "Nov", delivered: 26400, bounced: 690, failed: 340 },
+  { month: "Dec", delivered: 28200, bounced: 640, failed: 318 },
+];
+
+const MOCK_RATE = [
+  { month: "Jan", openRate: 58.2, bounceRate: 1.8 },
+  { month: "Feb", openRate: 60.1, bounceRate: 1.6 },
+  { month: "Mar", openRate: 57.8, bounceRate: 2.1 },
+  { month: "Apr", openRate: 61.4, bounceRate: 1.7 },
+  { month: "May", openRate: 59.3, bounceRate: 1.9 },
+  { month: "Jun", openRate: 62.7, bounceRate: 1.5 },
+  { month: "Jul", openRate: 60.5, bounceRate: 1.8 },
+  { month: "Aug", openRate: 58.9, bounceRate: 2.0 },
+  { month: "Sep", openRate: 63.1, bounceRate: 1.4 },
+  { month: "Oct", openRate: 61.8, bounceRate: 1.7 },
+  { month: "Nov", openRate: 59.6, bounceRate: 1.9 },
+  { month: "Dec", openRate: 58.3, bounceRate: 2.5 },
+];
+
+const MOCK_EMAIL_TILES = [
+  { label: "SENDS 7D",       value: "4,218", unit: "/7d", color: "#497cff", sparkline: [380, 420, 390, 450, 410, 480, 420] },
+  { label: "OPEN RATE",      value: "58.3",  unit: "%",   color: "#22c55e", sparkline: [55, 57, 56, 59, 58, 60, 58] },
+  { label: "REJECT RATE",    value: "0.4",   unit: "%",   color: "#ef4444", sparkline: [0.3, 0.5, 0.4, 0.3, 0.4, 0.5, 0.4] },
+  { label: "BOUNCE RATE",    value: "1.9",   unit: "%",   color: "#f59e0b", sparkline: [1.8, 2.1, 1.9, 2.0, 1.8, 1.9, 1.9] },
+  { label: "COMPLAINT RATE", value: "0.02",  unit: "%",   color: "#a855f7", sparkline: [0.01, 0.02, 0.02, 0.01, 0.02, 0.02, 0.01] },
+];
+
+const MOCK_ACTIVITY = [
+  { icon: "check_circle",   iconColor: "text-green-500",  desc: "JOB-0428-01 completed — 26,100 delivered",   time: "2m ago" },
+  { icon: "picture_as_pdf", iconColor: "text-purple-500", desc: "PDF batch ready — 28,200 files",             time: "8m ago" },
+  { icon: "send",           iconColor: "text-blue-500",   desc: "Email dispatch started — JOB-0428-02",       time: "12m ago" },
+  { icon: "warning",        iconColor: "text-amber-500",  desc: "3 bounce events on JOB-0427-01",             time: "1h ago" },
+  { icon: "upload_file",    iconColor: "text-gray-500",   desc: "JOB-0427-01 uploaded by admin@geojit.com",   time: "3h ago" },
+];
+
+const PIPELINE_ROWS = [
+  { label: "Records Uploaded", pct: 100,  bar: "bg-blue-500",   indent: false },
+  { label: "PDFs Generated",   pct: 98.6, bar: "bg-purple-500", indent: false },
+  { label: "Emails Sent",      pct: 97.5, bar: "bg-green-500",  indent: false },
+  { label: "Delivered",        pct: 94.9, bar: "bg-teal-500",   indent: false },
+  { label: "↳ Bounced",        pct: 3.4,  bar: "bg-amber-400",  indent: true  },
+];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function greeting(name?: string) {
   const h = new Date().getHours();
-  const salutation = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
-  return `${salutation}${name ? `, ${name.split(" ")[0]}` : ""}`;
+  const sal = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  return `${sal}${name ? `, ${name.split(" ")[0]}` : ""}`;
 }
 
-const activityDot: Record<string, string> = {
-  JOB_REGISTERED: "dot-ok", CUSTOMER_REGISTERED: "dot-info",
-  PDF_GENERATED: "dot-ok", PDF_FAILED: "dot-err",
-  EMAIL_SENT: "dot-ok", EMAIL_FAILED: "dot-err",
-  DELIVERY: "dot-ok", BOUNCE: "dot-err", COMPLAINT: "dot-err",
-  SPLIT_PROGRESS: "dot-info", SPLIT_COMPLETE: "dot-info", RESEND_TRIGGERED: "dot-info",
-  PDF_TRIGGERED: "dot-info", EMAIL_SKIPPED: "dot-warn",
-};
+interface TooltipPayloadItem { name: string; value: number; color: string; }
+interface CustomTooltipProps { active?: boolean; payload?: TooltipPayloadItem[]; label?: string; }
 
-const normaliseCode = (code?: string) => code?.split("/")[0] ?? code;
+function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white shadow-md rounded-lg px-3 py-2 text-xs border border-gray-100">
+      {label && <div className="font-semibold text-gray-700 mb-1">{label}</div>}
+      {payload.map((p) => (
+        <div key={p.name} className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
+          <span className="text-gray-600">{p.name}:</span>
+          <span className="font-bold text-gray-900">
+            {typeof p.value === "number" ? p.value.toLocaleString() : p.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-const EVENT_TYPE_LABEL: Record<string, string> = {
-  JOB_REGISTERED: "File registered",
-  CUSTOMER_REGISTERED: "Record registered",
-  SPLIT_PROGRESS: "Reading file",
-  SPLIT_COMPLETE: "File read complete",
-  PDF_TRIGGERED: "PDF creation started",
-  PDF_GENERATED: "PDF created",
-  PDF_FAILED: "PDF creation failed",
-  EMAIL_SENT: "Email sent",
-  EMAIL_FAILED: "Email failed",
-  EMAIL_SKIPPED: "Email delivery failed",
-  DELIVERY: "Delivered",
-  BOUNCE: "Email bounced",
-  COMPLAINT: "Spam report",
-  RESEND_TRIGGERED: "Resend triggered",
-};
+// ─── KPI Card ────────────────────────────────────────────────────────────────
+function KpiCard({
+  icon, iconColor, label, value, desc, clickable, href, borderHover,
+}: {
+  icon: string; iconColor: string; label: string; value: number | string;
+  desc: string; clickable?: boolean; href?: string; borderHover?: string;
+}) {
+  const router = useRouter();
+  return (
+    <div
+      className={cn(
+        "bg-white rounded-xl border border-gray-100 p-4 flex flex-col gap-1 transition-all",
+        clickable && "cursor-pointer hover:shadow-sm",
+        clickable && borderHover,
+      )}
+      onClick={clickable && href ? () => router.push(href) : undefined}
+    >
+      <span className={cn("material-symbols-outlined text-[20px]", iconColor)}>{icon}</span>
+      <div className="text-[10px] tracking-widest text-gray-400 font-medium uppercase mt-1">{label}</div>
+      <div
+        className={cn(
+          "text-3xl font-bold text-gray-900",
+          label === "RECORDS FAILED" && Number(value) > 0 && "text-red-600",
+        )}
+      >
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </div>
+      <div className="text-xs text-gray-400 leading-tight">{desc}</div>
+      {clickable && href && label === "RECORDS FAILED" && (
+        <Link
+          href={href}
+          className="text-red-500 text-xs hover:underline mt-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          View exceptions ›
+        </Link>
+      )}
+    </div>
+  );
+}
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const user = useAuthStore(s => s.user);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const user = useAuthStore((s) => s.user);
+  const [filter, setFilter] = useState<"today" | "7d" | "month">("today");
+  const [chartYear, setChartYear] = useState(new Date().getFullYear());
+  const [chartType, setChartType] = useState<"bar" | "line">("bar");
 
-  const { data: metricsRes, isLoading: loadingMetrics } = useQuery({
-    queryKey: ["dashboard-metrics", dateFrom, dateTo],
-    queryFn: () => dashboardApi.metrics(dateFrom || undefined, dateTo || undefined),
-    refetchInterval: 30_000,
+  const metrics = MOCK_METRICS;
+
+  const today = new Date().toLocaleDateString("en-GB", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    timeZone: "Asia/Kolkata",
   });
 
-  const metrics: DashboardMetrics | undefined = metricsRes?.data?.data;
-  const today = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const filterLabel =
+    filter === "today" ? "Today" : filter === "7d" ? "Last 7 days" : "This month";
 
+  void chartType; // used for toggle state, chart type switching could be extended
 
   return (
-    <div className="p-6 space-y-6 max-w-[1600px] mx-auto w-full fade-up">
-      {/* Page header */}
+    <div className="space-y-5 max-w-[1600px] mx-auto w-full fade-up">
+
+      {/* ── A) Header row ───────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          {loadingMetrics
-            ? <div className="h-9 w-64 bg-slate-100 animate-pulse rounded-lg" />
-            : <h2 className="text-[1.7rem] font-extrabold text-slate-900 headline">
-                {greeting(user?.name)}
-              </h2>
-          }
-          <p className="text-slate-500 text-sm mt-1">
-            Today&apos;s contract-note pipeline · <span className="font-semibold text-slate-700">{today}</span>
+          <h1 className="font-bold text-2xl text-gray-900">{greeting(user?.name)}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Today&apos;s contract-note pipeline · {today}
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2">
           <Link
             href="/process"
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-[#00174b] text-white rounded-xl text-sm font-bold hover:bg-[#003ea8] transition-all shadow-lg shadow-blue-900/15"
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#00174b] text-white rounded-lg text-sm font-medium hover:bg-[#003ea8] transition-colors"
           >
-            <span className="material-symbols-outlined text-base">upload_file</span>
+            <span className="material-symbols-outlined text-[18px]">upload_file</span>
             Process File
           </Link>
           <Link
             href="/jobs"
-            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-white text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-all border border-slate-200"
+            className="flex items-center gap-1.5 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors"
           >
-            <span className="material-symbols-outlined text-base">history</span>
+            <span className="material-symbols-outlined text-[18px]">history</span>
             View Runs
           </Link>
         </div>
       </div>
 
-      {/* Date filter */}
-      <div className="card p-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="material-symbols-outlined text-slate-400 text-base">filter_list</span>
-          <div className="flex items-center gap-2">
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm" />
-            <span className="text-slate-400 text-xs">to</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm" />
-          </div>
-          <div className="flex gap-1">
-            <button onClick={() => { setDateFrom(new Date().toISOString().slice(0, 10)); setDateTo(new Date().toISOString().slice(0, 10)); }} className={cn("px-2.5 py-1 rounded-lg text-[11px] font-semibold", !dateFrom && !dateTo ? "bg-[#00174b] text-white" : "bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-[#003ea8]")}>Today</button>
-            <button onClick={() => { const d = new Date(); setDateFrom(new Date(d.getTime() - 7 * 86400000).toISOString().slice(0, 10)); setDateTo(d.toISOString().slice(0, 10)); }} className={cn("px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-[#003ea8]")}>Last 7d</button>
-            <button onClick={() => { const d = new Date(); setDateFrom(new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)); setDateTo(d.toISOString().slice(0, 10)); }} className={cn("px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-[#003ea8]")}>This month</button>
-          </div>
-          {(dateFrom || dateTo) && (
-            <button onClick={() => { setDateFrom(""); setDateTo(""); }} className="p-1 text-slate-400 hover:text-slate-700">
-              <span className="material-symbols-outlined text-sm">close</span>
-            </button>
-          )}
-          <div className="flex-1" />
-          <span className="text-[11px] text-slate-400">{!dateFrom && !dateTo ? "Showing today" : `${dateFrom || "..."} → ${dateTo || "..."}`}</span>
-        </div>
+      {/* ── B) Filter bar ───────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border p-2 flex items-center gap-2">
+        <span className="material-symbols-outlined text-gray-400 text-[16px]">filter_list</span>
+        <span className="text-sm text-gray-500">View:</span>
+        {(["today", "7d", "month"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={cn(
+              "px-3 py-1 rounded-lg text-sm font-medium transition-colors",
+              filter === f ? "bg-[#00174b] text-white" : "text-gray-600 hover:bg-gray-100",
+            )}
+          >
+            {f === "today" ? "Today" : f === "7d" ? "Last 7d" : "This month"}
+          </button>
+        ))}
+        <span className="ml-auto text-sm text-gray-400 italic">
+          Showing data for: {filterLabel}
+        </span>
       </div>
 
-      {/* 6 Metric Cards */}
-      {loadingMetrics ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {Array(6).fill(0).map((_, i) => (
-            <div key={i} className="h-32 bg-slate-100 animate-pulse rounded-[1rem]" />
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <MetricCard
-            title="Total customers"
-            value={metrics?.totalCustomersInPipeline ?? 0}
-            icon="groups"
-            iconBg="bg-blue-50"
-            iconColor="text-[#497cff]"
-            badge={{ label: `${metrics?.activeJobs ?? 0} active`, ok: true }}
-            sub="Unique clientCodes in pipeline"
-          />
-          <MetricCard
-            title="Emails sent"
-            value={metrics?.totalEmailsSent ?? 0}
-            icon="task_alt"
-            iconBg="bg-emerald-50"
-            iconColor="text-emerald-600"
-            sub="Submitted to SES for delivery"
-          />
-          <MetricCard
-            title="Email delivered"
-            value={metrics?.totalDelivered ?? 0}
-            icon="mark_email_read"
-            iconBg="bg-emerald-50"
-            iconColor="text-emerald-600"
-            badge={{ label: `${metrics?.totalEmailsSent ? Math.round((metrics.totalDelivered ?? 0) / metrics.totalEmailsSent * 100) : 0}% of sent`, ok: true }}
-            sub="SNS-confirmed inbox delivery"
-          />
-          <MetricCard
-            title="Records failed"
-            value={metrics?.totalFailedRecords ?? 0}
-            icon="error"
-            iconBg="bg-rose-50"
-            iconColor="text-rose-600"
-            sub="Records rejected due to validation issue"
-            subErr={!!metrics?.totalFailedRecords}
-          />
-          <MetricCard
-            title="PDFs generated"
-            value={metrics?.totalPdfsGenerated ?? 0}
-            icon="picture_as_pdf"
-            iconBg="bg-purple-50"
-            iconColor="text-purple-600"
-            sub="Contract notes ready"
-          />
-          <MetricCard
-            title="Bounced emails"
-            value={metrics?.totalBounced ?? 0}
-            icon="mail_off"
-            iconBg="bg-amber-50"
-            iconColor="text-amber-600"
-            badge={{ label: `${metrics?.bounceRate ?? 0}% rate`, ok: metrics?.bounceRate === 0 }}
-            sub="Invalid or inactive email address"
-            subErr={!!metrics?.totalBounced}
-          />
-        </div>
-      )}
+      {/* ── C) 6 KPI cards ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <KpiCard icon="group"           iconColor="text-blue-500"   label="TOTAL RECORDS"   value={metrics.totalCustomers}     desc="Total records in current pipeline run" />
+        <KpiCard icon="send"            iconColor="text-green-500"  label="EMAILS SENT"     value={metrics.emailSentCount}     desc="Submitted to SES for delivery" />
+        <KpiCard icon="mark_email_read" iconColor="text-teal-500"   label="EMAIL DELIVERED" value={metrics.emailDeliveredCount} desc="SNS-confirmed inbox delivery" />
+        <KpiCard icon="error"           iconColor="text-red-500"    label="RECORDS FAILED"  value={metrics.failedCount}        desc="Records rejected — validation or send failure" clickable href="/exceptions" borderHover="hover:border-red-200" />
+        <KpiCard icon="picture_as_pdf"  iconColor="text-purple-500" label="PDFS GENERATED"  value={metrics.pdfGeneratedCount}  desc="Contract notes ready for dispatch" />
+        <KpiCard icon="cancel"          iconColor="text-orange-500" label="BOUNCED EMAILS"  value={metrics.emailBouncedCount}  desc="Invalid or inactive recipient address" clickable href="/resend?status=BOUNCED" borderHover="hover:border-orange-200" />
+      </div>
 
-      {/* Empty state — no data today */}
-      {!loadingMetrics && metrics && metrics.totalCustomersInPipeline === 0 && !dateFrom && !dateTo && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-100 rounded-xl text-sm text-amber-700">
-          <span className="material-symbols-outlined text-amber-400 text-base flex-shrink-0">info</span>
-          <span>No contract notes processed today.</span>
+      {/* ── D) Amber banner ─────────────────────────────────────────────── */}
+      {metrics.totalCustomers === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-amber-500 text-[18px]">info</span>
+            <span className="text-sm text-amber-800">No contract notes processed today.</span>
+          </div>
           <button
-            onClick={() => {
-              const d = new Date();
-              setDateFrom(new Date(d.getTime() - 7 * 86400000).toISOString().slice(0, 10));
-              setDateTo(d.toISOString().slice(0, 10));
-            }}
-            className="ml-auto text-xs font-semibold text-[#003ea8] hover:underline flex-shrink-0"
+            onClick={() => setFilter("7d")}
+            className="text-amber-600 text-sm font-medium underline"
           >
             View last 7 days
           </button>
         </div>
       )}
 
-      {/* Pipeline Funnel + Recent Activity */}
-      <div className="grid lg:grid-cols-3 gap-5">
+      {/* ── E) Charts row ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-        {/* Pipeline Stage Breakdown */}
-        <div className="lg:col-span-2 card p-5">
-          <div className="mb-5">
-            <div className="font-bold text-slate-900 headline">Pipeline Breakdown</div>
-            <div className="text-xs text-slate-500 mt-0.5">Where every record went — from upload to final delivery</div>
+        {/* Monthly Volume */}
+        <div className="bg-white rounded-xl border p-4">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <div className="text-base font-semibold text-gray-900">Monthly Volume</div>
+              <div className="text-xs text-gray-400 mt-0.5">
+                Delivered, bounced and failed — absolute counts
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <select
+                value={chartYear}
+                onChange={(e) => setChartYear(Number(e.target.value))}
+                className="px-2 py-1 border border-gray-200 rounded-lg text-xs font-medium bg-white"
+              >
+                {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <button
+                onClick={() => setChartType("bar")}
+                className={cn("p-1.5 rounded-lg", chartType === "bar" ? "bg-gray-200" : "hover:bg-gray-100")}
+                title="Bar chart"
+              >
+                <span className="material-symbols-outlined text-[16px] text-gray-600">bar_chart</span>
+              </button>
+              <button
+                onClick={() => setChartType("line")}
+                className={cn("p-1.5 rounded-lg", chartType === "line" ? "bg-gray-200" : "hover:bg-gray-100")}
+                title="Line chart"
+              >
+                <span className="material-symbols-outlined text-[16px] text-gray-600">show_chart</span>
+              </button>
+            </div>
           </div>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={MOCK_MONTHLY} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <CartesianGrid stroke="#f3f4f6" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false}
+                tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="delivered" name="Delivered" stackId="a" fill="#22c55e" />
+              <Bar dataKey="bounced"   name="Bounced"   stackId="a" fill="#f59e0b" />
+              <Bar dataKey="failed"    name="Failed"    stackId="a" fill="#ef4444" radius={[2, 2, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
 
-          {metrics ? (() => {
-            const total     = metrics.totalCustomersInPipeline;
-            const pdfs      = metrics.totalPdfsGenerated;
-            const sent      = metrics.totalEmailsSent;
-            const bounced   = metrics.totalBounced;
-            const snsConfirmed = metrics.totalDelivered ?? 0; // SNS-confirmed delivery receipts
-            const failed   = metrics.totalFailedRecords;
-            return (
-              <div className="space-y-1">
+        {/* Open Rate & Bounce Rate */}
+        <div className="bg-white rounded-xl border p-4">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <div className="text-base font-semibold text-gray-900">Open Rate &amp; Bounce Rate</div>
+              <div className="text-xs text-gray-400 mt-0.5">
+                Engagement and reputation health — % rates over 12 months
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                <span className="text-xs text-gray-500">Open rate %</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-5 inline-block border-t-2 border-dashed border-amber-400" />
+                <span className="text-xs text-gray-500">Bounce rate %</span>
+              </div>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={MOCK_RATE} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
+              <CartesianGrid stroke="#f3f4f6" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+              <YAxis
+                yAxisId="left" domain={[40, 70]}
+                tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false}
+                tickFormatter={(v: number) => `${v}%`}
+              />
+              <YAxis
+                yAxisId="right" orientation="right" domain={[0, 5]}
+                tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false}
+                tickFormatter={(v: number) => `${v}%`}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Area
+                yAxisId="left" type="monotone" dataKey="openRate" name="Open Rate"
+                stroke="#22c55e" fill="#22c55e" fillOpacity={0.1} strokeWidth={2} dot={false}
+              />
+              <Line
+                yAxisId="right" type="monotone" dataKey="bounceRate" name="Bounce Rate"
+                stroke="#f59e0b" strokeDasharray="4 4" strokeWidth={2} dot={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
 
-                {/* Stage 1 — Upload */}
-                <FunnelRow icon="upload_file" label="Records uploaded" value={total} total={total}
-                  color="bg-slate-400" note="Raw records received from the trading system file" />
+      {/* ── F) Email Analytics Band ─────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-base font-semibold text-gray-900">Email Analytics</div>
+            <div className="text-xs text-gray-400 mt-0.5">
+              SES sending statistics — Asia Pacific (Mumbai) · last 7 days
+            </div>
+          </div>
+          <Link href="/email-analytics" className="text-sm text-[#497cff] hover:underline font-medium">
+            Full analytics →
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-3">
+          {MOCK_EMAIL_TILES.map((tile) => (
+            <div key={tile.label} className="flex flex-col gap-1">
+              <div className="text-[10px] uppercase tracking-widest text-gray-400 font-medium">
+                {tile.label}
+              </div>
+              <div className="text-xl font-bold text-gray-900">
+                {tile.value}
+                <span className="text-xs text-gray-400 font-normal ml-0.5">{tile.unit}</span>
+              </div>
+              <SparklineChart data={tile.sparkline} color={tile.color} height={40} />
+            </div>
+          ))}
+        </div>
+      </div>
 
-                {/* Stage 2 — PDF generation */}
-                <FunnelRow icon="picture_as_pdf" label="PDFs generated" value={pdfs} total={total}
-                  color="bg-purple-500"
-                  note="Contract note PDF created — password-protected and digitally signed" />
+      {/* ── G) Pipeline Breakdown + Recent Activity ─────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
 
-                {/* Stage 3 — Email dispatch */}
-                <FunnelRow icon="send" label="Emails sent" value={sent} total={total}
-                  color="bg-indigo-400" note="Contract note PDF emailed to client" />
-
-                {/* Delivery outcomes — indent */}
-                <div className="ml-6 border-l-2 border-slate-200 pl-4 pt-1 pb-1 space-y-1">
-
-                  <FunnelRow icon="mark_email_read" label="Delivered" value={snsConfirmed} total={total}
-                    color="bg-emerald-500"
-                    note={snsConfirmed > 0 ? `${snsConfirmed.toLocaleString()} server-confirmed delivery receipts` : "Awaiting server delivery receipts"} />
-
-                  <div className="flex items-center gap-2 py-1.5 px-3 bg-amber-50 border border-amber-100 rounded-xl">
-                    <span className="material-symbols-outlined text-amber-500 text-[16px]">unsubscribe</span>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-semibold text-amber-700">Bounced</span>
-                        <span className="text-[11px] font-bold text-amber-600 mono">{bounced.toLocaleString()} · {sent > 0 ? ((bounced/sent)*100).toFixed(1) : 0}% of sent</span>
-                      </div>
-                      <div className="text-[10px] text-amber-500 mt-0.5">Email rejected by recipient mail server — invalid or inactive address. Use Resend tab to retry.</div>
-                    </div>
-                  </div>
-
-                  {failed > 0 && (
-                    <div className="flex items-center gap-2 py-1.5 px-3 bg-rose-50 border border-rose-100 rounded-xl">
-                      <span className="material-symbols-outlined text-rose-400 text-[16px]">error</span>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-rose-700">Failed records</span>
-                          <span className="text-[11px] font-bold text-rose-600 mono">{failed.toLocaleString()} · {total > 0 ? ((failed/total)*100).toFixed(1) : 0}%</span>
-                        </div>
-                        <div className="text-[10px] text-rose-400 mt-0.5">Could not generate PDF or send email. Use Resend tab to retry.</div>
-                      </div>
-                    </div>
-                  )}
-
+        {/* Pipeline Breakdown (col-span-3) */}
+        <div className="lg:col-span-3 bg-white rounded-xl border p-4">
+          <div className="text-base font-semibold text-gray-900 mb-4">Pipeline Breakdown</div>
+          <div className="space-y-4">
+            {PIPELINE_ROWS.map((row) => (
+              <div key={row.label} className={cn(row.indent && "ml-4")}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className={cn("text-sm text-gray-700", row.indent && "text-xs text-gray-500")}>
+                    {row.label}
+                  </span>
+                  <span className="text-sm text-gray-700 font-medium">{row.pct}%</span>
+                </div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={cn("h-full rounded-full", row.bar)}
+                    style={{ width: `${row.pct}%` }}
+                  />
                 </div>
               </div>
-            );
-          })() : (
-            <div className="space-y-3">
-              {Array(6).fill(0).map((_, i) => (
-                <div key={i} className="h-10 bg-slate-100 animate-pulse rounded-xl" />
-              ))}
-            </div>
-          )}
+            ))}
+          </div>
         </div>
 
-        {/* Recent Pipeline Events */}
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <div className="font-bold text-slate-900 headline">Recent activity</div>
-              <div className="text-[11px] text-slate-500 mt-0.5">Latest events today</div>
-            </div>
-            <Link href="/jobs" className="text-[11px] font-semibold text-[#003ea8] hover:underline">View all runs</Link>
-          </div>
-          <div className="space-y-2">
-            {(metrics?.recentActivity ?? []).length > 0 ? (metrics?.recentActivity ?? []).map((item, i) => (
-              <Link
-                key={i}
-                href={item.jobId ? `/jobs/${item.jobId}` : "#"}
-                className={cn(
-                  "flex items-start gap-2.5 p-2.5 bg-slate-50 rounded-xl hover:bg-blue-50 cursor-pointer transition-colors group",
-                  !item.jobId && "pointer-events-none"
-                )}
-              >
-                <span className={cn("dot mt-1.5 flex-shrink-0", activityDot[item.eventType] ?? "dot-info")} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold text-slate-800">{item.description.replace(/([A-Z0-9]+)\/\1/g, "$1")}</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    {EVENT_TYPE_LABEL[item.eventType] ?? item.eventType.replace(/_/g, " ")} · {formatDistanceToNow(toUtcDate(item.eventTimestamp) ?? new Date(), { addSuffix: true })}
-                  </div>
+        {/* Recent Activity (col-span-2) */}
+        <div className="lg:col-span-2 bg-white rounded-xl border p-4">
+          <div className="text-base font-semibold text-gray-900 mb-3">Recent Activity</div>
+          <div className="space-y-3">
+            {MOCK_ACTIVITY.map((item, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <span
+                  className={cn(
+                    "material-symbols-outlined text-[18px] flex-shrink-0 mt-0.5",
+                    item.iconColor,
+                  )}
+                >
+                  {item.icon}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-gray-700">{item.desc}</div>
                 </div>
-                {item.jobId && <span className="material-symbols-outlined text-slate-300 group-hover:text-[#497cff] text-sm">chevron_right</span>}
-              </Link>
-            )) : (
-              <div className="text-center text-slate-400 text-sm py-8">No pipeline events today</div>
-            )}
+                <span className="text-xs text-gray-400 flex-shrink-0">{item.time}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function FunnelRow({
-  label, icon, value, total, color, note, pct, warn, err,
-}: {
-  label: string; icon: string; value: number; total: number;
-  color: string; note: string; pct?: number; warn?: boolean; err?: boolean;
-}) {
-  const barPct = pct ?? (total > 0 ? Math.round((value / total) * 100 * 10) / 10 : 0);
-  const displayPct = total > 0 ? Math.round((value / total) * 1000) / 10 : 0;
-  return (
-    <div className="flex items-center gap-3">
-      <span className={cn(
-        "material-symbols-outlined text-[18px] flex-shrink-0 w-5 text-center",
-        err ? "text-rose-400" : warn ? "text-amber-400" : "text-slate-400"
-      )}>{icon}</span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[12px] font-semibold text-slate-700">{label}</span>
-          <div className="flex items-center gap-2">
-            <span className={cn(
-              "text-[11px] font-bold mono",
-              err ? "text-rose-600" : warn ? "text-amber-600" : "text-slate-900"
-            )}>{value.toLocaleString()}</span>
-            <span className="text-[10px] text-slate-400 w-10 text-right">{displayPct}%</span>
-          </div>
-        </div>
-        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-          <div
-            className={cn("h-full rounded-full transition-all", color)}
-            style={{ width: `${barPct}%` }}
-          />
-        </div>
-        <div className="text-[10px] text-slate-400 mt-0.5">{note}</div>
-      </div>
-    </div>
-  );
-}
-
-function MetricCard({
-  title, value, icon, iconBg, iconColor, sub, badge, subErr
-}: {
-  title: string; value: number; icon: string;
-  iconBg?: string; iconColor?: string;
-  sub?: string; badge?: { label: string; ok: boolean };
-  subErr?: boolean;
-}) {
-  return (
-    <div className="metric">
-      <div className="flex items-start justify-between mb-3">
-        <div className={cn("p-2 rounded-xl flex-shrink-0", iconBg ?? "bg-blue-50")}>
-          <span className={cn("material-symbols-outlined", iconColor ?? "text-[#497cff]")}>{icon}</span>
-        </div>
-        {badge && (
-          <span className={cn(
-            "pill",
-            badge.ok ? "pill-ok" : "pill-err"
-          )}>
-            {badge.label}
-          </span>
-        )}
-      </div>
-      <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-0.5">{title}</div>
-      <div className="text-[1.9rem] font-extrabold tabular text-slate-900 headline">
-        {value.toLocaleString()}
-      </div>
-      {sub && (
-        <div className={cn("text-[11px] mt-1", subErr ? "text-rose-500 font-semibold" : "text-slate-400")}>
-          {sub}
-        </div>
-      )}
     </div>
   );
 }

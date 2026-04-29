@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { jobsApi, templatesApi } from "@/lib/api";
 import type { Job, EmailTemplate, JobCustomer } from "@/types";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -32,8 +33,9 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── main component ───────────────────────────────────────────────────────────
 
-export default function ResendPage() {
+function ResendPageContent() {
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
 
   // ── bulk config state ──────────────────────────────────────────────────────
   const [bulkScope, setBulkScope] = useState("job");
@@ -121,8 +123,11 @@ export default function ResendPage() {
   const isBulkPending = bulkResending || bulkResendingCodes || bulkResendingAllBounced || bulkResendingByDate;
 
   // ── failed customers table state ───────────────────────────────────────────
-  const [tableStatus, setTableStatus] = useState<"ALL" | "BOUNCED" | "FAILED">("ALL");
-  const [tableJobId, setTableJobId] = useState("");
+  const [tableStatus, setTableStatus] = useState<"ALL" | "BOUNCED" | "FAILED">(() => {
+    const s = searchParams.get("status");
+    return s === "BOUNCED" || s === "FAILED" ? s : "ALL";
+  });
+  const [tableJobId, setTableJobId] = useState(() => searchParams.get("jobId") ?? "");
   const [tableFrom, setTableFrom] = useState("");
   const [tableTo, setTableTo] = useState("");
   const [tablePage, setTablePage] = useState(0);
@@ -231,18 +236,18 @@ export default function ResendPage() {
     qc.invalidateQueries({ queryKey: ["failed-customers"] });
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  return (
-    <>
-      {/* Sticky header — OUTSIDE fade-up to prevent stacking context issues */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-[9999]">
-        <div className="max-w-[1600px] mx-auto">
-          <h2 className="text-xl font-extrabold text-slate-900 headline">Resend</h2>
-          <p className="text-slate-500 text-[12px] mt-0.5">Re-send contract note emails in bulk for failed, bounced, or specific clients.</p>
-        </div>
-      </div>
+   // ─────────────────────────────────────────────────────────────────────────
+   return (
+     <>
+       {/* Sticky header — OUTSIDE fade-up to prevent stacking context issues */}
+       <div className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-[9999]">
+         <div className="max-w-[1600px] mx-auto">
+           <h2 className="text-xl font-extrabold text-slate-900 headline">Resend</h2>
+           <p className="text-slate-500 text-[12px] mt-0.5">Re-send contract note emails in bulk for failed, bounced, or specific clients.</p>
+         </div>
+       </div>
 
-      <div className="fade-up">
+       <div className="fade-up">
         <div className="p-6 max-w-[1600px] mx-auto w-full space-y-5">
 
         {/* Bulk configuration */}
@@ -560,5 +565,13 @@ export default function ResendPage() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function ResendPage() {
+  return (
+    <Suspense fallback={null}>
+      <ResendPageContent />
+    </Suspense>
   );
 }

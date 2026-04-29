@@ -6,7 +6,9 @@ export function middleware(request: NextRequest) {
   // Check for auth token in cookies (set on login) or skip check for public routes
   const token = request.cookies.get("auth-token")?.value;
 
-  const isPublic = pathname.startsWith("/login");
+  const isPublic = pathname.startsWith("/login")
+    || pathname.startsWith("/privacy-policy")
+    || pathname.startsWith("/about-us");
 
   if (!isPublic && !token) {
     const loginUrl = new URL("/login", request.url);
