@@ -276,6 +276,46 @@ export interface ClientProfile {
   totalContracts: number;
 }
 
+// ─── Segment ────────────────────────────────────────────────────────────
+export interface Segment {
+  id: number           // Using number (Integer) instead of bigint
+  code: string           // e.g. 'EQUITY-COMBINEMARGIN'
+  displayName: string    // e.g. 'Equity Combine Margin'
+  s3Folder: string       // e.g. 'equity'
+  isActive: boolean
+}
+
+// ─── Bounce Report ───────────────────────────────────────────────────────
+export interface BounceRecord {
+  partyCode: string
+  clientName: string
+  clientEmail: string
+  activityDate: string
+  contractNo: string
+  tradeDate: string
+  fileName: string
+  bounceType: string     // 'Permanent' | 'Transient' | 'Complaint' | ''
+  bounceReason: string
+  s3Key: string
+  segment: string
+  recordDate: string     // YYYY-MM-DD
+}
+
+export interface BounceListResponse {
+  records: BounceRecord[]
+  totalCount: number
+  from: string
+  to: string
+  segment: string | null
+}
+
+export interface ResendBounceResult {
+  partyCode: string
+  jobId: string
+  status: 'QUEUED' | 'FAILED'
+  message: string
+}
+
 // ─── Exception Counts ─────────────────────────────────────────────────
 export interface ExceptionCounts {
   pdfFailed: number;
@@ -380,7 +420,8 @@ export interface OpsTodaySummary {
   total: number;
   completed: number;
   inProgress: number;
-  failed: number;
+  failures: number;
+  delivered: number;
 }
 
 export interface OpsHealthStatus {
@@ -535,6 +576,25 @@ export interface ChannelConfig {
   whatsApp: WhatsAppChannelConfig;
 }
 
+// ─── Audit Log ─────────────────────────────────────────────────────
+export type AuditAction =
+  | "LOGIN" | "LOGOUT" | "UPLOAD" | "RESEND" | "BULK_RESEND"
+  | "CREATE" | "UPDATE" | "DELETE" | "ACTIVATE" | "TEMPLATE_EDIT"
+  | "DOWNLOAD" | "SEARCH" | "VIEW";
+
+export interface AuditLog {
+  id: number;
+  userId: string;
+  userEmail: string;
+  userName?: string;
+  action: AuditAction;
+  targetEntity: string;
+  details?: Record<string, unknown>;
+  ipAddress: string;
+  userAgent?: string;
+  eventTimestamp: string;
+}
+
 // ─── Ops Dashboard ────────────────────────────────────────────────────
 export interface OpsIssue {
   id: string;
@@ -545,14 +605,14 @@ export interface OpsIssue {
 }
 
 export interface OpsHourlyFailure {
-  hour: number;
+  hour: string;
   appFailures: number;
   infraFailures: number;
 }
 
 export interface OpsFailureDistribution {
-  name: string;
-  value: number;
+  type: string;
+  count: number;
   color: string;
 }
 

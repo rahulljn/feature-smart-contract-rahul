@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { toast } from "sonner";
 
-const USE_MOCK = true;
+const USE_MOCK = false;
 
 export function Header() {
   const { user, clearUser } = useAuthStore();
@@ -57,10 +57,8 @@ export function Header() {
     queryKey: ["header-metrics"],
     queryFn: () => {
       if (USE_MOCK) return Promise.resolve({ data: { data: { failedJobs: 1, totalBounced: 640, activeJobs: 1 } } });
-      return dashboardApi.metrics(
-        new Date().toISOString().slice(0, 10),
-        new Date().toISOString().slice(0, 10),
-      );
+      const today = new Date();
+      return dashboardApi.metrics(today, today);
     },
     staleTime: 60_000,
     refetchInterval: 60_000,

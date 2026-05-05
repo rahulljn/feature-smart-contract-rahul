@@ -95,9 +95,18 @@ public class LambdaExceptionService {
     }
 
     private List<LambdaExceptionResponse> query(String jobId, String lambdaName) {
-        List<LambdaException> entities = (lambdaName != null && !lambdaName.isBlank())
-                ? repository.findByJobIdAndLambdaNameOrderByOccurredAtDesc(jobId, lambdaName)
-                : repository.findByJobIdOrderByOccurredAtDesc(jobId);
+        boolean hasJob    = jobId    != null && !jobId.isBlank();
+        boolean hasLambda = lambdaName != null && !lambdaName.isBlank();
+        List<LambdaException> entities;
+        if (hasJob && hasLambda) {
+            entities = repository.findByJobIdAndLambdaNameOrderByOccurredAtDesc(jobId, lambdaName);
+        } else if (hasJob) {
+            entities = repository.findByJobIdOrderByOccurredAtDesc(jobId);
+        } else if (hasLambda) {
+            entities = repository.findByLambdaNameOrderByOccurredAtDesc(lambdaName);
+        } else {
+            entities = repository.findTop100ByOrderByOccurredAtDesc();
+        }
         return entities.stream().map(LambdaExceptionResponse::from).toList();
     }
 }

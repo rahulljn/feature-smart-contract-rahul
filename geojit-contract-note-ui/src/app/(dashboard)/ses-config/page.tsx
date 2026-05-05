@@ -129,7 +129,7 @@ export default function SesConfigPage() {
   }));
 
   return (
-    <div className="p-6 space-y-5 max-w-[1600px] mx-auto w-full fade-up">
+    <div className="space-y-5 fade-up">
       <div>
         <h2 className="text-2xl font-extrabold text-slate-900 headline">Email Configuration</h2>
         <p className="text-slate-500 text-sm mt-1">Sender reputation, email delivery settings, and suppression management for contract note emails.</p>

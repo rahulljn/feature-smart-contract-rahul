@@ -1,33 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { configApi } from "@/lib/api";
+import type { Certificate } from "@/types";
 
-const USE_MOCK = true;
-void USE_MOCK;
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const MOCK_CERTS = [
-  {
-    id: "1", name: "GEOJIT-PROD-2025", active: true,  daysRemaining: 23,
-    subject: "CN=Geojit Financial Services Ltd", issuer: "CN=DigiCert SHA2 Secure CA",
-    validFrom: "2025-01-15", validTo: "2026-05-22", thumbprint: "A3:B2:C1:D0:E9:F8",
-    algorithm: "SHA-256 with RSA", keySize: 2048, serial: "04:A1:2B:3C",
-  },
-  {
-    id: "2", name: "GEOJIT-DR-2025",   active: false, daysRemaining: 48,
-    subject: "CN=Geojit Financial Services DR", issuer: "CN=DigiCert SHA2 Secure CA",
-    validFrom: "2025-03-01", validTo: "2026-06-17", thumbprint: "B4:C3:D2:E1:F0:A9",
-    algorithm: "SHA-256 with RSA", keySize: 2048, serial: "04:B2:3C:4D",
-  },
-  {
-    id: "3", name: "GEOJIT-DEV-2026",  active: false, daysRemaining: 248,
-    subject: "CN=Geojit Financial Services Dev", issuer: "CN=Let's Encrypt Authority X3",
-    validFrom: "2026-01-01", validTo: "2027-01-01", thumbprint: "C5:D4:E3:F2:A1:B0",
-    algorithm: "SHA-256 with RSA", keySize: 4096, serial: "04:C3:4D:5E",
-  },
-];
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function daysBadge(days: number) {
   if (days <= 30)  return "bg-red-100 text-red-700";
@@ -41,30 +20,38 @@ function daysBarColor(days: number) {
   return "bg-green-500";
 }
 
-interface Cert {
-  id: string; name: string; active: boolean; daysRemaining: number;
-  subject: string; issuer: string; validFrom: string; validTo: string;
-  thumbprint: string; algorithm: string; keySize: number; serial: string;
+function calculateDaysRemaining(validTo?: string): number {
+  if (!validTo) return 0;
+  const expiryDate = new Date(validTo);
+  const today = new Date();
+  const diffTime = expiryDate.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return Math.max(0, diffDays);
 }
 
-function CertCard({ cert, onActivate }: { cert: Cert; onActivate: (id: string) => void }) {
+function formatCertDate(date?: string): string {
+  if (!date) return "—";
+  return new Date(date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function CertCard({ cert, onActivate }: { cert: Certificate & { daysRemaining: number }; onActivate: (secretName: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const barPct = Math.min(100, Math.round((cert.daysRemaining / 365) * 100));
 
   return (
     <div className={cn(
       "bg-white rounded-xl border p-4 flex flex-col gap-3",
-      cert.active && "ring-2 ring-[#00174b]/20",
+      cert.isActive && "ring-2 ring-[#00174b]/20",
     )}>
       {/* Title row */}
       <div className="flex items-center justify-between gap-2">
-        <div className="font-semibold text-gray-900 text-sm truncate">{cert.name}</div>
+        <div className="font-semibold text-gray-900 text-sm truncate">{cert.fileName}</div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className={cn(
             "px-2 py-0.5 rounded-full text-[10px] font-bold",
-            cert.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500",
+            cert.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500",
           )}>
-            {cert.active ? "Active" : "Inactive"}
+            {cert.isActive ? "Active" : "Inactive"}
           </span>
           <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", daysBadge(cert.daysRemaining))}>
             {cert.daysRemaining}d
@@ -84,15 +71,14 @@ function CertCard({ cert, onActivate }: { cert: Cert; onActivate: (id: string) =
       <div className="space-y-1.5 text-xs">
         {[
           { label: "Days to expiry", value: `${cert.daysRemaining} days` },
-          { label: "Subject",        value: cert.subject },
-          { label: "Issuer",         value: cert.issuer },
-          { label: "Thumbprint",     value: cert.thumbprint },
-          { label: "Valid To",       value: cert.validTo },
-          { label: "Algorithm",      value: cert.algorithm },
+          { label: "Subject",        value: cert.subject || "—" },
+          { label: "Issuer",         value: cert.issuer || "—" },
+          { label: "Thumbprint",     value: cert.thumbprint || "—" },
+          { label: "Valid To",       value: formatCertDate(cert.validTo) },
         ].map(({ label, value }) => (
           <div key={label} className="flex items-start justify-between gap-2">
             <span className="text-gray-400 flex-shrink-0">{label}</span>
-            <span className="text-gray-700 font-medium text-right truncate">{value}</span>
+            <span className="text-gray-700 font-medium text-right truncate" title={value}>{value}</span>
           </div>
         ))}
       </div>
@@ -101,9 +87,9 @@ function CertCard({ cert, onActivate }: { cert: Cert; onActivate: (id: string) =
       {expanded && (
         <div className="space-y-1.5 text-xs border-t border-gray-100 pt-2">
           {[
-            { label: "Valid From", value: cert.validFrom },
-            { label: "Key Size",   value: `${cert.keySize} bits` },
-            { label: "Serial No.", value: cert.serial },
+            { label: "Valid From", value: formatCertDate(cert.validFrom) },
+            { label: "Uploaded By", value: cert.uploadedBy?.name || "—" },
+            { label: "Uploaded At", value: formatCertDate(cert.createdAt) },
           ].map(({ label, value }) => (
             <div key={label} className="flex items-start justify-between gap-2">
               <span className="text-gray-400 flex-shrink-0">{label}</span>
@@ -121,9 +107,9 @@ function CertCard({ cert, onActivate }: { cert: Cert; onActivate: (id: string) =
         >
           {expanded ? "Show less" : "Show more"}
         </button>
-        {!cert.active && (
+        {!cert.isActive && (
           <button
-            onClick={() => onActivate(cert.id)}
+            onClick={() => onActivate(cert.secretName)}
             className="ml-auto text-xs px-2.5 py-1 bg-[#00174b] text-white rounded-lg hover:bg-[#003ea8] transition-colors"
           >
             Activate
@@ -135,7 +121,9 @@ function CertCard({ cert, onActivate }: { cert: Cert; onActivate: (id: string) =
 }
 
 export default function CertificatesPage() {
-  const [certs, setCerts]           = useState(MOCK_CERTS);
+  const [certs, setCerts]           = useState<(Certificate & { daysRemaining: number })[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
   const [uploading, setUploading]   = useState(false);
   const [label, setLabel]           = useState("");
   const [password, setPassword]     = useState("");
@@ -143,13 +131,35 @@ export default function CertificatesPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const fetchCerts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await configApi.certList();
+      const certsWithDays = res.data.data.map((c: Certificate) => ({ ...c, daysRemaining: calculateDaysRemaining(c.validTo) }));
+      setCerts(certsWithDays);
+    } catch (err) {
+      setError("Failed to load certificates");
+      toast.error("Failed to load certificates");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCerts();
+  }, []);
+
   const expiringCerts = certs.filter((c) => c.daysRemaining <= 30);
 
-  function handleActivate(id: string) {
-    setCerts((prev) =>
-      prev.map((c) => ({ ...c, active: c.id === id })),
-    );
-    toast.success("Certificate activated");
+  async function handleActivate(secretName: string) {
+    try {
+      await configApi.certActivate(secretName);
+      toast.success("Certificate activated");
+      await fetchCerts();
+    } catch (err) {
+      toast.error("Failed to activate certificate");
+    }
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -170,12 +180,33 @@ export default function CertificatesPage() {
       return;
     }
     setUploading(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    toast.success(`Certificate "${label}" uploaded successfully`);
-    setUploading(false);
-    setSelectedFile(null);
-    setLabel("");
-    setPassword("");
+    try {
+      const form = new FormData();
+      form.append("file", selectedFile);
+      form.append("password", password);
+      form.append("label", label);
+      await configApi.certUpload(form);
+      toast.success(`Certificate "${label}" uploaded successfully`);
+      setSelectedFile(null);
+      setLabel("");
+      setPassword("");
+      await fetchCerts();
+    } catch (err) {
+      toast.error("Failed to upload certificate");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-5 fade-up">
+        <div className="flex items-center justify-between">
+          <h1 className="font-bold text-2xl text-gray-900">Certificates</h1>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
+      </div>
+    );
   }
 
   return (
@@ -199,7 +230,7 @@ export default function CertificatesPage() {
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-red-500 text-[18px]">warning</span>
             <span className="text-sm text-red-800 font-medium">
-              {expiringCerts[0].name} expires in {expiringCerts[0].daysRemaining} days
+              {expiringCerts[0].fileName} expires in {expiringCerts[0].daysRemaining} days
             </span>
           </div>
           <button
@@ -212,11 +243,32 @@ export default function CertificatesPage() {
       )}
 
       {/* Cert cards */}
-      <div className="grid md:grid-cols-3 gap-4">
-        {certs.map((cert) => (
-          <CertCard key={cert.id} cert={cert} onActivate={handleActivate} />
-        ))}
-      </div>
+      {loading ? (
+        <div className="grid md:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-xl border p-4 animate-pulse">
+              <div className="h-5 bg-gray-200 rounded w-3/4 mb-3"></div>
+              <div className="h-2 bg-gray-100 rounded-full mb-3"></div>
+              <div className="space-y-2">
+                <div className="h-3 bg-gray-200 rounded w-full"></div>
+                <div className="h-3 bg-gray-200 rounded w-full"></div>
+                <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : certs.length === 0 ? (
+        <div className="bg-white rounded-xl border p-12 text-center">
+          <span className="material-symbols-outlined text-gray-300 text-[48px]">description</span>
+          <p className="text-gray-500 mt-3">No certificates uploaded yet</p>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-3 gap-4">
+          {certs.map((cert) => (
+            <CertCard key={cert.certId || cert.fileName || Math.random()} cert={cert} onActivate={handleActivate} />
+          ))}
+        </div>
+      )}
 
       {/* Upload panel */}
       <div className="bg-white rounded-xl border p-5">

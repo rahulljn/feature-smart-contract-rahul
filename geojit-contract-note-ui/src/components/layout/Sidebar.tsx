@@ -7,7 +7,12 @@ import { useAuthStore } from "@/store/auth";
 import { useState, useEffect } from "react";
 import { alertsApi } from "@/lib/api";
 
-const USE_MOCK = true;
+interface SidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
+const USE_MOCK = false;
 
 interface NavItem {
   href: string;
@@ -60,7 +65,7 @@ const navSections: NavSection[] = [
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -99,28 +104,38 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex flex-col h-full bg-[#00174b] text-white flex-shrink-0 w-44">
+    <aside className={cn(
+      "flex flex-col h-full bg-[#00174b] text-white flex-shrink-0 transition-all duration-200 ease-in-out",
+      collapsed ? "w-16" : "w-60"
+    )}>
       {/* Logo area */}
-      <div className="flex items-center gap-2.5 p-4 border-b border-white/10">
+      <div className={cn(
+        "flex items-center gap-2.5 p-4 border-b border-white/10",
+        collapsed ? "justify-center" : ""
+      )}>
         <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
           <span className="material-symbols-outlined text-white text-[18px]">account_balance</span>
         </div>
-        <span className="text-sm font-semibold text-white leading-tight truncate">ContractNote Pro</span>
+        {!collapsed && (
+          <span className="text-sm font-semibold text-white leading-tight truncate">ContractNote Pro</span>
+        )}
       </div>
 
       {/* Search bar */}
-      <div className="px-3 pt-3 pb-1">
-        <div className="relative">
-          <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40 text-[16px]">
-            search
-          </span>
-          <input
-            type="text"
-            placeholder="Search jobs, templates…"
-            className="w-full bg-white/10 rounded-lg pl-8 pr-3 py-1.5 text-sm text-white/70 placeholder-white/40 outline-none focus:bg-white/15 transition-colors"
-          />
+      {!collapsed && (
+        <div className="px-3 pt-3 pb-1">
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40 text-[16px]">
+              search
+            </span>
+            <input
+              type="text"
+              placeholder="Search jobs, templates…"
+              className="w-full bg-white/10 rounded-lg pl-8 pr-3 py-1.5 text-sm text-white/70 placeholder-white/40 outline-none focus:bg-white/15 transition-colors"
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Nav sections */}
       <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0">
@@ -135,24 +150,26 @@ export function Sidebar() {
 
           return (
             <div key={section.name} className="mb-1">
-              <button
-                onClick={() => toggleSection(section.name)}
-                className="flex items-center justify-between w-full px-2 pt-3 pb-1 group"
-              >
-                <span className="text-white/50 text-[10px] uppercase tracking-widest font-semibold">
-                  {section.name}
-                </span>
-                <span
-                  className={cn(
-                    "material-symbols-outlined text-white/30 text-[14px] transition-transform duration-200",
-                    isOpen ? "rotate-0" : "-rotate-90",
-                  )}
+              {!collapsed && (
+                <button
+                  onClick={() => toggleSection(section.name)}
+                  className="flex items-center justify-between w-full px-2 pt-3 pb-1 group"
                 >
-                  expand_more
-                </span>
-              </button>
+                  <span className="text-white/50 text-[10px] uppercase tracking-widest font-semibold">
+                    {section.name}
+                  </span>
+                  <span
+                    className={cn(
+                      "material-symbols-outlined text-white/30 text-[14px] transition-transform duration-200",
+                      isOpen ? "rotate-0" : "-rotate-90",
+                    )}
+                  >
+                    expand_more
+                  </span>
+                </button>
+              )}
 
-              {isOpen && (
+              {(collapsed || isOpen) && (
                 <div className="space-y-0.5">
                   {visibleItems.map(({ href, label, icon, showUnreadBadge }) => {
                     const active =
@@ -160,31 +177,50 @@ export function Sidebar() {
                     const badge =
                       showUnreadBadge && unreadCount > 0 ? unreadCount : 0;
                     return (
-                      <Link
-                        key={href}
-                        href={href}
-                        className={cn(
-                          "flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-all duration-150",
-                          active
-                            ? "bg-white/15 text-white font-medium"
-                            : "text-white/70 hover:bg-white/10 hover:text-white",
-                        )}
-                      >
-                        <span
+                      <div key={href} className="relative group">
+                        <Link
+                          href={href}
+                          title={collapsed ? label : undefined}
                           className={cn(
-                            "material-symbols-outlined text-[18px] flex-shrink-0",
-                            active ? "text-white" : "text-white/50",
+                            "flex items-center rounded-lg text-sm transition-all duration-150",
+                            collapsed
+                              ? "justify-center w-10 h-10 mx-auto"
+                              : "gap-2 px-2 py-1.5",
+                            active
+                              ? "bg-white/15 text-white font-medium"
+                              : "text-white/70 hover:bg-white/10 hover:text-white",
                           )}
                         >
-                          {icon}
-                        </span>
-                        <span className="truncate flex-1 text-[0.8rem]">{label}</span>
-                        {badge > 0 && (
-                          <span className="ml-auto text-[9px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center flex-shrink-0">
-                            {badge > 99 ? "99+" : badge}
+                          <span
+                            className={cn(
+                              "material-symbols-outlined flex-shrink-0",
+                              collapsed ? "text-[22px]" : "text-[18px]",
+                              active ? "text-white" : "text-white/50",
+                            )}
+                          >
+                            {icon}
                           </span>
+                          {!collapsed && (
+                            <span className="truncate flex-1 text-[0.8rem]">{label}</span>
+                          )}
+                          {!collapsed && badge > 0 && (
+                            <span className="ml-auto text-[9px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center flex-shrink-0">
+                              {badge > 99 ? "99+" : badge}
+                            </span>
+                          )}
+                          {collapsed && badge > 0 && (
+                            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                          )}
+                        </Link>
+                        {collapsed && (
+                          <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2
+                            bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap
+                            opacity-0 group-hover:opacity-100 transition-opacity z-50
+                            pointer-events-none">
+                            {label}
+                          </div>
                         )}
-                      </Link>
+                      </div>
                     );
                   })}
                 </div>
@@ -195,19 +231,34 @@ export function Sidebar() {
       </nav>
 
       {/* Bottom links */}
-      <div className="mt-auto border-t border-white/10 px-3 py-3 flex gap-4">
-        <Link
-          href="/privacy-policy"
-          className="text-white/50 text-xs hover:text-white/80 transition-colors"
+      <div className="mt-auto">
+        <button
+          onClick={onToggle}
+          className="flex items-center justify-center w-full py-3
+            text-white/50 hover:text-white hover:bg-white/10
+            transition-colors border-t border-white/10"
         >
-          Privacy Policy
-        </Link>
-        <Link
-          href="/about-us"
-          className="text-white/50 text-xs hover:text-white/80 transition-colors"
-        >
-          About Us
-        </Link>
+          <span className="material-symbols-outlined text-lg">
+            {collapsed ? 'chevron_right' : 'chevron_left'}
+          </span>
+          {!collapsed && <span className="ml-2 text-xs">Collapse</span>}
+        </button>
+        {!collapsed && (
+          <div className="px-3 py-3 flex gap-4">
+            <Link
+              href="/privacy-policy"
+              className="text-white/50 text-xs hover:text-white/80 transition-colors"
+            >
+              Privacy Policy
+            </Link>
+            <Link
+              href="/about-us"
+              className="text-white/50 text-xs hover:text-white/80 transition-colors"
+            >
+              About Us
+            </Link>
+          </div>
+        )}
       </div>
     </aside>
   );

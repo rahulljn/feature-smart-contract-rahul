@@ -78,6 +78,7 @@ app:
       chunks-bucket: chunks-s3-geojit-prod
       pdf-bucket: pdf-s3-geojit-prod
       report-bucket: geojit-report-files-s3-prod
+      bounce-report-bucket: ${BOUNCE_REPORT_BUCKET:geojit-report-files-s3-dev}
       error-bucket: geojit-error-bucket-prod
       template-bucket: geojit-email-templates-dev
     sqs:

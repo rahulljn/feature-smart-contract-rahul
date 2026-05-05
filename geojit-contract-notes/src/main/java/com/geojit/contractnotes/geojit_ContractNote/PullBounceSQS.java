@@ -62,6 +62,7 @@ public class PullBounceSQS implements RequestHandler<Object, Object> {
 
         String    geojitTradedate = "";
         String    geojitExchange  = null;
+        String    geojitSegment   = "equity";
         int       geojitCount     = 0;
 
         ClientConfiguration config = new ClientConfiguration();
@@ -149,6 +150,10 @@ public class PullBounceSQS implements RequestHandler<Object, Object> {
                         JSONObject meta      = new JSONObject(header.getString("value"));
                         String     partyCode = meta.optString("partycode");
 
+                        // Extract segment from metajson for S3 path partitioning
+                        String segment = meta.optString("segment", "equity").trim().toLowerCase();
+                        if (segment.isEmpty()) segment = "equity";
+
                         // Sanitize partyCode — remove slash to avoid S3 folder nesting
                         String safePartyCode = partyCode.replace("/", "_").replace("\\", "_").trim();
 
@@ -201,6 +206,9 @@ public class PullBounceSQS implements RequestHandler<Object, Object> {
 
                         allReportRows.append(csvRow).append("\n");
 
+                        // Track segment for final flush (use last segment seen)
+                        geojitSegment = segment;
+
                         String timestamp = tsFormatter.format(new Date());
 
                         // ── Write per-record CSV to S3 ─────────────────────────
@@ -210,6 +218,7 @@ public class PullBounceSQS implements RequestHandler<Object, Object> {
                         singleWriter.close();
 
                         String perRecordKey = "GeojitCN-EmailReport/BounceLog/"
+                                + segment + "/"
                                 + tdYear + "/" + tdMonth + "/" + tdDay + "/"
                                 + safePartyCode + "/" + safePartyCode
                                 + "_Bounce_Log_GeojitCN_" + timestamp + ".csv";
@@ -221,14 +230,14 @@ public class PullBounceSQS implements RequestHandler<Object, Object> {
                         // ── Send BOUNCE status event to pipeline status queue ──
                         String jobid = meta.optString("jobid", null);
                         if (jobid != null && !jobid.isEmpty()) {
-                            sendBounceStatusEvent(jobid, partyCode, bounceType, bounceReason, meta.optString("email"));
+                            sendBounceStatusEvent(jobid, partyCode, bounceType, bounceReason, meta.optString("email"), segment);
                         }
 
                         // ── Mid-batch flush ────────────────────────────────────
                         if (geojitCount >= BATCH_FLUSH_SIZE) {
                             flushAllReport(s3Client, allReportFile, allReportRows.toString(),
                                     tdYear, tdMonth, tdDay, timestamp,
-                                    "BounceLogAllReport", "Bounce_Log_GeojitCN");
+                                    "BounceLogAllReport", "Bounce_Log_GeojitCN", segment);
                             allReportRows = new StringBuilder();
                             geojitCount   = 0;
                         }
@@ -257,7 +266,7 @@ public class PullBounceSQS implements RequestHandler<Object, Object> {
                     String tdYear  = new SimpleDateFormat("yyyy").format(tdDate);
                     flushAllReport(s3Client, allReportFile, allReportRows.toString(),
                             tdYear, tdMonth, tdDay, timestamp,
-                            "BounceLogAllReport", "Bounce_Log_GeojitCN");
+                            "BounceLogAllReport", "Bounce_Log_GeojitCN", geojitSegment);
                 }
             }
 
@@ -285,7 +294,8 @@ public class PullBounceSQS implements RequestHandler<Object, Object> {
                                 String   tdDay,
                                 String   timestamp,
                                 String   reportFolder,
-                                String   filePrefix) {
+                                String   filePrefix,
+                                String   segment) {
         try {
             FileWriter writer = new FileWriter(tmpFile, false);
             writer.write(CSV_HEADER + "\n");
@@ -293,6 +303,7 @@ public class PullBounceSQS implements RequestHandler<Object, Object> {
             writer.close();
 
             String s3Key = "GeojitCN-EmailReport/" + reportFolder + "/"
+                    + segment + "/"
                     + tdYear + "/" + tdMonth + "/" + tdDay + "/allreport/"
                     + filePrefix + "_" + timestamp + ".csv";
 
@@ -315,12 +326,13 @@ public class PullBounceSQS implements RequestHandler<Object, Object> {
         return value;
     }
 
-    private void sendBounceStatusEvent(String jobid, String partyCode, String bounceType, String bounceReason, String recipientEmail) {
+    private void sendBounceStatusEvent(String jobid, String partyCode, String bounceType, String bounceReason, String recipientEmail, String segment) {
         try {
             JSONObject payload = new JSONObject();
             payload.put("bounceType", bounceType);
             payload.put("bounceSubType", bounceReason);
             payload.put("recipientEmail", recipientEmail);
+            payload.put("segment", segment);
 
             JSONObject event = new JSONObject();
             event.put("jobId", jobid);

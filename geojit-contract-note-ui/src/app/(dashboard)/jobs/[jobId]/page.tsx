@@ -1,12 +1,10 @@
 "use client";
 
-const USE_MOCK = true;
-
 import { use, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { jobsApi, pipelineApi } from "@/lib/api";
 import { downloadCsv } from "@/lib/export";
-import type { Job, JobCustomer, PipelineEvent, CloudWatchLambda } from "@/types";
+import type { Job, JobCustomer, PipelineEvent } from "@/types";
 import { Loader2 } from "lucide-react";
 import { cn, fmtDateTime, fmtTime } from "@/lib/utils";
 import { toast } from "sonner";
@@ -57,107 +55,6 @@ const EVENT_LABEL: Record<string, string> = {
 
 const normaliseCode = (code?: string | null) => code?.split("/")[0] ?? code ?? "";
 
-function CloudWatchSection({ jobId }: { jobId: string }) {
-  const [open, setOpen] = useState(true);
-  const [expandedLambda, setExpandedLambda] = useState<string | null>(null);
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["cw-exceptions-detail", jobId],
-    queryFn: () => jobsApi.cloudwatchExceptions(jobId, "ALL"),
-    enabled: !!jobId && open,
-    refetchInterval: 30_000,
-    staleTime: 25_000,
-  });
-
-  const lambdas: CloudWatchLambda[] = data?.data?.data ?? [];
-  const totalErrors = lambdas.reduce((s, l) => s + l.errorCount, 0);
-  const toggleLambda = (name: string) =>
-    setExpandedLambda(prev => (prev === name ? null : name));
-
-  return (
-    <div className="card overflow-hidden">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-2.5 text-xs text-slate-500 hover:text-[#00174b] hover:bg-slate-50/60 transition-colors"
-      >
-        <span className="flex items-center gap-1.5 font-semibold">
-          <span className="material-symbols-outlined text-sm">cloud</span>
-          CloudWatch Logs (Live)
-        </span>
-        <span className="flex items-center gap-2">
-          {open && isLoading && <Loader2 size={12} className="animate-spin" />}
-          {!isLoading && totalErrors > 0 && (
-            <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-              {totalErrors} error{totalErrors !== 1 ? "s" : ""}
-            </span>
-          )}
-          {!isLoading && totalErrors === 0 && open && (
-            <span className="bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
-              No errors
-            </span>
-          )}
-          <span className="material-symbols-outlined text-base">
-            {open ? "expand_less" : "expand_more"}
-          </span>
-        </span>
-      </button>
-
-      {open && (
-        <div className="pb-3 border-t border-slate-100">
-          {isLoading ? (
-            <div className="flex items-center gap-2 text-xs text-slate-400 px-5 py-3">
-              <Loader2 size={12} className="animate-spin" /> Fetching CloudWatch logs…
-            </div>
-          ) : lambdas.length === 0 ? (
-            <p className="text-xs text-slate-400 px-5 py-3">No exceptions found in CloudWatch for this run.</p>
-          ) : (
-            <div className="divide-y divide-slate-50">
-              {lambdas.map(lambda => (
-                <div key={lambda.lambdaName}>
-                  <div
-                    className="flex items-center gap-3 px-5 py-2 text-xs cursor-pointer hover:bg-red-50/50"
-                    onClick={() => toggleLambda(lambda.lambdaName)}
-                  >
-                    <span className="material-symbols-outlined text-sm text-red-500 flex-shrink-0">error</span>
-                    <span className="mono font-semibold flex-1 text-red-700">{lambda.lambdaName}</span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                        {lambda.errorCount}
-                      </span>
-                      <span className="material-symbols-outlined text-sm text-slate-400">
-                        {expandedLambda === lambda.lambdaName ? "expand_less" : "expand_more"}
-                      </span>
-                    </span>
-                  </div>
-                  {expandedLambda === lambda.lambdaName && lambda.events.length > 0 && (
-                    <div className="mx-5 mb-2 space-y-1.5">
-                      {lambda.events.map((e, i) => (
-                        <div key={i} className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-xs">
-                          <div className="flex items-center gap-3 mb-1 text-slate-500 mono">
-                            <span>{e.timestamp}</span>
-                            {e.logStream && (
-                              <span className="truncate max-w-[240px] text-slate-400" title={e.logStream}>
-                                {e.logStream}
-                              </span>
-                            )}
-                          </div>
-                          <pre className="text-red-700 whitespace-pre-wrap break-all leading-relaxed font-mono text-[11px]">
-                            {e.message}
-                          </pre>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function bounceLabel(type?: string | null) {
   if (!type) return "Bounced";
   if (type.toLowerCase().includes("permanent")) return "Permanent — address doesn't exist";
@@ -172,37 +69,6 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState("ov");
 
-  const MOCK_JOB = {
-    jobId: jobId || "JOB-0428-01",
-    fileName: "EQUITY_20260429.txt",
-    segmentType: "EQUITY-COMBINEMARGIN",
-    status: "COMPLETED",
-    totalRecords: 28200,
-    processedCount: 28200,
-    pdfGeneratedCount: 28058,
-    emailSentCount: 28058,
-    emailDeliveredCount: 26100,
-    bounceCount: 640,
-    emailFailedCount: 318,
-    hardBounceCount: 420,
-    softBounceCount: 220,
-    failedCount: 318,
-    pdfFailedCount: 142,
-    invalidRecordCount: 0,
-    emailSkippedCount: 0,
-    progressPercent: 100,
-    uploadedAt: new Date().toISOString(),
-    tradeDate: "2026-04-29",
-    uploadedBy: { name: "admin@geojit.com" },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  const MOCK_CUSTOMERS = [
-    { id: 1, partyCode: "ZYR175", email: "z***@example.com", pdfStatus: "GENERATED", emailStatus: "DELIVERED", bounceType: null, bounceReason: null, emailSentAt: new Date().toISOString(), deliveredAt: new Date().toISOString(), bouncedAt: null },
-    { id: 2, partyCode: "ACC201", email: "a***@example.com", pdfStatus: "GENERATED", emailStatus: "BOUNCED",   bounceType: "Permanent", bounceReason: "Address does not exist", emailSentAt: new Date().toISOString(), deliveredAt: null, bouncedAt: new Date().toISOString() },
-    { id: 3, partyCode: "GEO445", email: "g***@example.com", pdfStatus: "FAILED",    emailStatus: "FAILED",    bounceType: null, bounceReason: "PDF generation timed out", emailSentAt: null, deliveredAt: null, bouncedAt: null },
-  ];
   const [bounceTypeFilter, setBounceTypeFilter] = useState<"ALL" | "Permanent" | "Transient">("ALL");
   const [page, setPage] = useState(0);
   const [liveEvents, setLiveEvents] = useState<PipelineEvent[]>([]);
@@ -210,30 +76,21 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
   const sseRef = useRef<EventSource | null>(null);
   const invalidateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: jobRes } = useQuery<any>({
+  const { data: jobRes, isLoading, isError } = useQuery<any>({
     queryKey: ["job", jobId],
-    queryFn: () => USE_MOCK
-      ? Promise.resolve({ data: { data: MOCK_JOB } })
-      : jobsApi.get(jobId),
-    initialData: USE_MOCK ? { data: { data: MOCK_JOB } } : undefined,
+    queryFn: () => jobsApi.get(jobId),
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: custRes, isLoading: loadingCust } = useQuery<any>({
     queryKey: ["job-customers", jobId, page],
-    queryFn: () => USE_MOCK
-      ? Promise.resolve({ data: { data: { content: MOCK_CUSTOMERS, totalPages: 1, totalElements: MOCK_CUSTOMERS.length } } })
-      : jobsApi.customers(jobId, page, 50),
-    initialData: USE_MOCK ? { data: { data: { content: MOCK_CUSTOMERS, totalPages: 1, totalElements: MOCK_CUSTOMERS.length } } } : undefined,
+    queryFn: () => jobsApi.customers(jobId, page, 50),
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: eventsRes } = useQuery<any>({
     queryKey: ["pipeline-events", jobId],
-    queryFn: () => USE_MOCK
-      ? Promise.resolve({ data: { data: [] } })
-      : pipelineApi.events(jobId),
-    initialData: USE_MOCK ? { data: { data: [] } } : undefined,
+    queryFn: () => pipelineApi.events(jobId),
   });
 
   const job: Job | undefined = jobRes?.data?.data;
@@ -249,7 +106,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
     const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}/jobs/${jobId}/stream`;
     const es = new EventSource(`${url}?token=${token}`);
     sseRef.current = es;
-    es.onmessage = (e) => {
+    const handler = (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data);
         if (data.eventType === "SPLIT_PROGRESS" && data.payload?.customersFound) {
@@ -264,21 +121,25 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
         }
       } catch { /* ignore */ }
     };
+    const SSE_EVENTS = [
+      "JOB_REGISTERED","CUSTOMER_REGISTERED","SPLIT_PROGRESS","SPLIT_COMPLETE",
+      "PDF_TRIGGERED","PDF_GENERATED","PDF_FAILED","EMAIL_SENT","EMAIL_FAILED",
+      "EMAIL_SKIPPED","DELIVERY","BOUNCE","COMPLAINT","RESEND_TRIGGERED",
+    ];
+    SSE_EVENTS.forEach(t => es.addEventListener(t, handler));
     return () => { es.close(); sseRef.current = null; if (invalidateTimerRef.current) clearTimeout(invalidateTimerRef.current); };
   }, [jobId, user?.accessToken, qc]);
 
-  if (!job) return <div className="flex justify-center py-16"><Loader2 className="animate-spin text-[#00174b]" /></div>;
+  if (isLoading) return <div className="flex justify-center py-16"><Loader2 className="animate-spin text-[#00174b]" /></div>;
+  if (isError || !job) return <div className="flex justify-center py-16 text-gray-500">Job not found</div>;
 
-  const exceptionCustomers = customers.filter(c => c.pdfStatus === "FAILED" || c.emailStatus === "FAILED");
-  const bounceCustomers    = customers.filter(c => c.emailStatus === "BOUNCED");
-  const exceptionCount     = exceptionCustomers.length;
-  const bounceCount        = bounceCustomers.length;
+  const bounceCustomers = customers.filter(c => c.emailStatus === "BOUNCED");
+  const bounceCount     = bounceCustomers.length;
 
   const tabs = [
     { id: "ov",   label: "Overview" },
     { id: "pipe", label: "Pipeline" },
-    { id: "exc",  label: "Exceptions", badge: exceptionCount > 0 ? String(exceptionCount) : undefined },
-    { id: "bnc",  label: "Bounces",    badge: bounceCount > 0    ? String(bounceCount)    : undefined },
+    { id: "bnc",  label: "Bounces",    badge: bounceCount > 0 ? String(bounceCount) : undefined },
     { id: "cli",  label: "All clients" },
   ];
 
@@ -616,67 +477,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
         );
       })()}
 
-      {/* ─── Tab 3: Exceptions ─────────────────────────────────────── */}
-      {activeTab === "exc" && (
-        <div className="p-6 space-y-4">
-          {exceptionCount > 0 ? (
-            <>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-bold text-slate-900">{exceptionCount} record{exceptionCount !== 1 ? "s" : ""} could not be processed</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">PDF generation or email delivery failed for these clients. Use the Resend tab to re-process.</div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => downloadCsv(`exceptions-${jobId.slice(0,8)}.csv`,
-                      ["Client code","Email","Failed stage","Reason"],
-                      exceptionCustomers.map(c => [normaliseCode(c.partyCode), c.email ?? "", c.pdfStatus === "FAILED" ? "Contract note creation" : "Email delivery", c.bounceReason ?? "Unknown"])
-                    )}
-                    className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 flex items-center gap-1.5"
-                  >
-                    <span className="material-symbols-outlined text-base">download</span>Export CSV
-                  </button>
-                </div>
-              </div>
-              <div className="card overflow-hidden">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="t-hd">
-                      <th className="px-5 py-3">Client code</th>
-                      <th className="px-5 py-3">Email address</th>
-                      <th className="px-5 py-3">Failed stage</th>
-                      <th className="px-5 py-3">Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {exceptionCustomers.map(c => (
-                      <tr key={c.id} className="t-row">
-                        <td className="px-5 py-3 text-[12px] font-bold text-slate-800 mono">{normaliseCode(c.partyCode)}</td>
-                        <td className="px-5 py-3 text-[11px] text-slate-600 mono">{c.email || <span className="text-slate-400 italic">not on file</span>}</td>
-                        <td className="px-5 py-3">
-                          <span className="pill pill-err">
-                            {c.pdfStatus === "FAILED" ? "Contract note creation" : "Email delivery"}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-[11px] text-slate-600">{c.bounceReason ?? "Check client record for details"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          ) : (
-            <div className="card p-14 text-center">
-              <span className="material-symbols-outlined text-5xl text-emerald-300" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-              <div className="font-bold text-slate-700 mt-3">No errors in this run</div>
-              <div className="text-[12px] text-slate-400 mt-1">All records were processed without failures</div>
-            </div>
-          )}
-          <CloudWatchSection jobId={jobId} />
-        </div>
-      )}
-
-      {/* ─── Tab 4: Bounces ────────────────────────────────────────── */}
+      {/* ─── Tab 3: Bounces ────────────────────────────────────────── */}
       {activeTab === "bnc" && (
         <div className="p-6 space-y-4">
           {bounceCount > 0 ? (
@@ -749,7 +550,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
         </div>
       )}
 
-      {/* ─── Tab 5: All clients ────────────────────────────────────── */}
+      {/* ─── Tab 4: All clients ────────────────────────────────────── */}
       {activeTab === "cli" && (
         <div className="p-6 space-y-4">
           <div className="flex items-center justify-between">

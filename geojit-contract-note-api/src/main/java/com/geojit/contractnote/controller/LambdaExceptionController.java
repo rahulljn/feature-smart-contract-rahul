@@ -20,9 +20,9 @@ public class LambdaExceptionController {
     private final LambdaExceptionService lambdaExceptionService;
 
     @GetMapping
-    @Operation(summary = "Drain SQS exception queue and return persisted exceptions for a job")
+    @Operation(summary = "Drain SQS exception queue and return persisted exceptions, optionally filtered by job")
     public ResponseEntity<ApiResponse<List<LambdaExceptionResponse>>> getExceptions(
-            @RequestParam String jobId,
+            @RequestParam(required = false) String jobId,
             @RequestParam(required = false) String lambdaName) {
         List<LambdaExceptionResponse> exceptions = lambdaExceptionService.fetchAndPersist(jobId, lambdaName);
         return ResponseEntity.ok(ApiResponse.ok(exceptions));

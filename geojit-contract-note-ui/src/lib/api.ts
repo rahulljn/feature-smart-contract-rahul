@@ -1,4 +1,11 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
+import type {
+  ApiResponse, Segment, BounceRecord, BounceListResponse, ResendBounceResult,
+  JobCustomer, Job, DashboardMetrics, PipelineEvent, JobStatus, PageResponse,
+  EmailTemplate, S3Template, TemplateFieldsRequest, TemplateValidateResult,
+  Certificate, SesConfig, AppUser, EmailEvent, ClientProfile,
+  ExceptionCounts, CloudWatchLambda, LambdaException, ValidationResult, AuditLog
+} from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api/v1";
 
@@ -86,13 +93,13 @@ export const jobsApi = {
 };
 
 export const lambdaExceptionsApi = {
-  list: (jobId: string, lambdaName?: string) =>
-    api.get("/exceptions", { params: { jobId, lambdaName: lambdaName || undefined } }),
+  list: (jobId?: string, lambdaName?: string) =>
+    api.get("/exceptions", { params: { jobId: jobId || undefined, lambdaName: lambdaName || undefined } }),
 };
 
 export const dashboardApi = {
-  metrics: (from?: string, to?: string) =>
-    api.get("/dashboard/metrics", { params: { from: from || undefined, to: to || undefined } }),
+  metrics: (from?: Date, to?: Date) =>
+    api.get("/dashboard/metrics", { params: { from: from ? from.toISOString().split("T")[0] : undefined, to: to ? to.toISOString().split("T")[0] : undefined } }),
   getMonthlyVolume: (year: number) =>
     api.get("/dashboard/monthly-volume", { params: { year } }),
   getDailySuccessRate: (days: 30 | 90) =>
@@ -182,6 +189,11 @@ export const usersApi = {
   deactivate: (id: string) => api.delete(`/users/${id}`),
 };
 
+export const auditApi = {
+  list: (page = 0, size = 20, search?: string, from?: string, to?: string, actions?: string) =>
+    api.get<PageResponse<AuditLog>>("/audit", { params: { page, size, search, from, to, actions } }),
+};
+
 export const alertsApi = {
   getRules: () => api.get("/alerts/rules"),
   createRule: (data: object) => api.post("/alerts/rules", data),
@@ -209,6 +221,37 @@ export const opsApi = {
   getIssues: () => api.get("/ops/issues"),
 };
 
+export const segmentsApi = {
+  list: () => api.get<ApiResponse<Segment[]>>("/segments"),
+};
+
+export const bounceReportApi = {
+  list: (params: { from?: string; to?: string; segment?: string }) =>
+    api.get<ApiResponse<BounceListResponse>>("/bounce-report", { params }),
+
+  getClientRecords: (partyCode: string,
+                     params: { from?: string; to?: string; segment?: string }) =>
+    api.get<ApiResponse<BounceRecord[]>>(
+      `/bounce-report/client/${encodeURIComponent(partyCode)}`, { params }),
+
+  getDownloadUrl: (partyCode: string, s3Key: string) =>
+    api.get<ApiResponse<{ url: string; expiresInSeconds: number }>>(
+      `/bounce-report/client/${encodeURIComponent(partyCode)}/download-url`,
+      { params: { s3Key } }),
+
+  downloadAll: (params: { from?: string; to?: string; segment?: string }) =>
+    api.get("/bounce-report/download-all", { params, responseType: "blob" }),
+
+  resend: (partyCode: string, fileName: string) =>
+    api.post<ApiResponse<ResendBounceResult>>(
+      "/bounce-report/resend", { partyCode, fileName }),
+
+  resendBulk: (records: { partyCode: string; fileName: string }[]) =>
+    api.post<ApiResponse<{
+      queued: number; failed: number; results: ResendBounceResult[]
+    }>>("/bounce-report/resend-bulk", { records }),
+};
+
 export const analyticsApi = {
   getEngagementSummary: (params: object) =>
     api.get("/analytics/engagement/summary", { params }),
@@ -221,3 +264,22 @@ export const analyticsApi = {
   getCustomerEngagement: (params: object) =>
     api.get("/analytics/engagement/customers", { params }),
 };
+
+// ─── React hooks ───────────────────────────────────────────────────────────
+import { useQuery } from "@tanstack/react-query";
+
+export function useSegments() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["segments"],
+    queryFn: async () => {
+      const res = await segmentsApi.list();
+      return res.data.data as Segment[];
+    },
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
+
+  return {
+    segments: data ?? [],
+    loading: isLoading,
+  };
+}

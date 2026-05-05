@@ -241,7 +241,7 @@ export default function TemplatesPage() {
   }
 
   return (
-    <div className="p-6 space-y-5 max-w-[1400px] mx-auto w-full fade-up">
+    <div className="space-y-5 fade-up">
 
       {/* Header */}
       <div className="flex items-start justify-between">

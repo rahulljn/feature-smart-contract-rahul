@@ -28,6 +28,12 @@ spring:
     enabled: true
     validate-on-migrate: true
 
+# ─── Application Custom Overrides ───────────────────────────────────
+app:
+  aws:
+    s3:
+      bounce-report-bucket: ${BOUNCE_REPORT_BUCKET:geojit-report-files-s3-prod}
+
 # ─── Server ──────────────────────────────────────────────────────────
 server:
   port: ${PORT:8080}

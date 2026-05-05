@@ -62,7 +62,7 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="p-6 space-y-5 max-w-[1600px] mx-auto w-full fade-up">
+    <div className="space-y-5 fade-up">
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-2xl font-extrabold text-slate-900 headline">Users &amp; Roles</h2>

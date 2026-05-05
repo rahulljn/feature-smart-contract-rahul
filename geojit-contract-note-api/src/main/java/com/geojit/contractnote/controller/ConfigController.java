@@ -117,9 +117,10 @@ public class ConfigController {
     // ─── Certificates ──────────────────────────────────────────────
 
     @GetMapping("/certificates")
-    @Operation(summary = "List all certificates from AWS Secrets Manager")
-    public ResponseEntity<ApiResponse<List<SecretsManagerCertResponse>>> getCertificates() {
-        return ResponseEntity.ok(ApiResponse.ok(secretsManagerService.listCertificates()));
+    @Transactional
+    @Operation(summary = "List all certificates from database")
+    public ResponseEntity<ApiResponse<List<Certificate>>> getCertificates() {
+        return ResponseEntity.ok(ApiResponse.ok(certificateRepository.findAll()));
     }
 
     @GetMapping("/certificates/active")

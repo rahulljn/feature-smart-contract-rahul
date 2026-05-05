@@ -12,6 +12,7 @@ app:
       chunks-bucket: chunks-s3-geojit-dev
       pdf-bucket: pdf-s3-geojit-dev
       report-bucket: geojit-report-files-s3-dev
+      bounce-report-bucket: geojit-report-files-s3-dev
       error-bucket: geojit-error-bucket-dev
     sqs:
       pipeline-status-queue: geojit-pipeline-status-queue.fifo

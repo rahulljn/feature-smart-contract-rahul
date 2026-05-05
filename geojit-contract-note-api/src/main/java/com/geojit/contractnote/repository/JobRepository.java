@@ -87,4 +87,5 @@ public interface JobRepository extends JpaRepository<Job, UUID> {
 
     @Query("SELECT j FROM Job j WHERE j.status IN ('PROCESSING', 'EMAILING') AND j.uploadedAt < :cutoff")
     List<Job> findStuckJobs(LocalDateTime cutoff);
+    java.util.Optional<Job> findByFileName(String fileName);
 }

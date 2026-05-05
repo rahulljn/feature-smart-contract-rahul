@@ -1,91 +1,88 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { lambdaExceptionsApi } from "@/lib/api";
+import type { LambdaException } from "@/types";
 
-const USE_MOCK = true;
-void USE_MOCK;
+// ─── Helpers ────────────────────────────────────────────────────────────────
+const LAMBDA_TABS = [
+  { key: "Split", label: "Split" },
+  { key: "Invoke", label: "Invoke" },
+  { key: "GetJson", label: "GetJson" },
+  { key: "PDF", label: "PDF" },
+  { key: "Email", label: "Email" },
+  { key: "Pull Bounce", label: "Pull Bounce" },
+  { key: "Pull Delivery", label: "Pull Delivery" },
+];
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface ExceptionEntry {
-  id: string;
-  jobId: string;
-  errorType: string;
-  message: string;
-  timestamp: string;
-  stackTrace: string;
-}
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const MOCK_EXCEPTIONS: Record<string, ExceptionEntry[]> = {
-  Split:        [],
-  Invoke:       [],
-  GetJson:      [],
-  PDF: [
-    {
-      id: "pdf-1", jobId: "a1b2c3d4",
-      errorType: "PDFGenerationException",
-      message: "Timeout after 15s — payload exceeded Lambda limit. Party: ZYR175",
-      timestamp: "2026-04-29 09:14:23",
-      stackTrace: `com.geojit.pdf.PDFGenerationException: Timeout after 15s
-\tat com.geojit.lambda.DynamicValuePdf.generatePDF(DynamicValuePdf.java:342)
-\tat com.geojit.lambda.InvokeEquityCombineMarginFile.handleRequest(InvokeEquityCombineMarginFile.java:218)
-Caused by: java.util.concurrent.TimeoutException: Task timed out after 15 seconds
-\tat java.util.concurrent.ForkJoinPool.awaitQuiescence(ForkJoinPool.java:837)`,
-    },
-    {
-      id: "pdf-2", jobId: "a1b2c3d4",
-      errorType: "NullPointerException",
-      message: "HeaderDto.partyCode is null — record type H missing for party ABX123",
-      timestamp: "2026-04-29 09:22:11",
-      stackTrace: `java.lang.NullPointerException: Cannot read field "partyCode"
-\tat com.geojit.pdf.renderer.PDFHeaderRenderer.render(PDFHeaderRenderer.java:87)
-\tat com.geojit.pdf.DynamicValuePdf.buildPage1(DynamicValuePdf.java:156)`,
-    },
-    {
-      id: "pdf-3", jobId: "b2c3d4e5",
-      errorType: "CertificateException",
-      message: "PKCS#12 certificate could not be loaded — password mismatch or expired cert",
-      timestamp: "2026-04-29 10:05:44",
-      stackTrace: `java.security.cert.CertificateException: Could not load PKCS12 keystore
-\tat com.geojit.pdf.signing.CertificateSigner.loadKeystore(CertificateSigner.java:44)
-\tat com.geojit.pdf.signing.CertificateSigner.sign(CertificateSigner.java:92)`,
-    },
-  ],
-  Email: [
-    {
-      id: "email-1", jobId: "a1b2c3d4",
-      errorType: "SESThrottlingException",
-      message: "Sending rate exceeded — 14 messages queued for retry",
-      timestamp: "2026-04-29 09:45:02",
-      stackTrace: `com.amazonaws.services.simpleemail.model.AmazonSimpleEmailServiceException: Throttling
-\tat com.amazonaws.services.simpleemail.AmazonSimpleEmailServiceClient.sendRawEmail(AmazonSimpleEmailServiceClient.java:1293)
-\tat com.geojit.email.EmailNotificationHandler.sendEmail(EmailNotificationHandler.java:167)`,
-    },
-    {
-      id: "email-2", jobId: "b2c3d4e5",
-      errorType: "InvalidParameterException",
-      message: "Invalid From address — SES identity not verified for noreply@geojit.com",
-      timestamp: "2026-04-29 11:12:38",
-      stackTrace: `com.amazonaws.services.simpleemail.model.InvalidParameterException: Invalid parameter
-\tat com.amazonaws.services.simpleemail.AmazonSimpleEmailServiceClient.sendEmail(AmazonSimpleEmailServiceClient.java:918)`,
-    },
-  ],
-  "Pull Bounce":   [],
-  "Pull Delivery": [],
+const LAMBDA_NAMES: Record<string, string> = {
+  "Split": "split-lambda-geojit",
+  "Invoke": "invoke-lambda-geojit",
+  "GetJson": "json-lambda-geojit",
+  "PDF": "create-pdf-geojit",
+  "Email": "email-notification-geojit",
+  "Pull Bounce": "pull-bounce-geojit",
+  "Pull Delivery": "pull-delivery-geojit",
 };
 
-const LAMBDA_TABS = ["Split", "Invoke", "GetJson", "PDF", "Email", "Pull Bounce", "Pull Delivery"];
+function formatExceptionDate(date?: string): string {
+  if (!date) return "—";
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+}
 
-export default function ExceptionsPage() {
-  const [activeTab, setActiveTab]   = useState("PDF");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+function ExceptionsContent() {
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState("PDF");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<string>(searchParams.get("jobId") ?? "");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [exceptions, setExceptions] = useState<LambdaException[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const exceptions = MOCK_EXCEPTIONS[activeTab] ?? [];
+  const fetchExceptions = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const lambdaName = LAMBDA_NAMES[activeTab];
+      const res = await lambdaExceptionsApi.list(selectedJobId || undefined, lambdaName);
+      setExceptions(res.data.data ?? []);
+    } catch (err) {
+      setError("Failed to load exceptions");
+      toast.error("Failed to load exceptions");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-  function copyTrace(trace: string) {
+  useEffect(() => {
+    fetchExceptions();
+  }, [activeTab, selectedJobId]);
+
+  function handleRefresh() {
+    setRefreshing(true);
+    fetchExceptions();
+  }
+
+  function copyTrace(trace?: string) {
+    if (!trace) return;
     navigator.clipboard.writeText(trace).then(() => toast.success("Copied to clipboard"));
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-5 fade-up">
+        <div className="flex items-center justify-between">
+          <h1 className="font-bold text-2xl text-gray-900">Exceptions</h1>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
+      </div>
+    );
   }
 
   return (
@@ -94,28 +91,40 @@ export default function ExceptionsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="font-bold text-2xl text-gray-900">Exceptions</h1>
-        <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-          <span className="material-symbols-outlined text-[16px]">refresh</span>
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            value={selectedJobId}
+            onChange={(e) => setSelectedJobId(e.target.value)}
+            placeholder="Filter by Job ID..."
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#00174b]/20 w-48"
+          />
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            <span className={cn("material-symbols-outlined text-[16px]", refreshing && "animate-spin")}>refresh</span>
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Lambda tabs */}
       <div className="flex gap-6 border-b border-gray-200 overflow-x-auto">
         {LAMBDA_TABS.map((tab) => {
-          const count = (MOCK_EXCEPTIONS[tab] ?? []).length;
+          const count = exceptions.length;
           return (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
+              key={tab.key}
+              onClick={() => { setActiveTab(tab.key); setExpandedId(null); }}
               className={cn(
                 "flex items-center gap-1.5 pb-2.5 text-sm font-medium transition-colors -mb-px whitespace-nowrap",
-                activeTab === tab
+                activeTab === tab.key
                   ? "border-b-2 border-[#00174b] text-[#00174b]"
                   : "text-gray-500 hover:text-gray-900",
               )}
             >
-              {tab}
+              {tab.label}
               {count > 0 && (
                 <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 text-[10px] font-bold">
                   {count}
@@ -128,7 +137,12 @@ export default function ExceptionsPage() {
 
       {/* Table / Empty state */}
       <div className="bg-white rounded-xl border overflow-hidden">
-        {exceptions.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-2">
+            <span className="material-symbols-outlined text-gray-400 text-[36px] animate-spin">sync</span>
+            <p className="text-gray-500 text-sm">Loading exceptions…</p>
+          </div>
+        ) : exceptions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-2">
             <span className="material-symbols-outlined text-green-400 text-[36px]">check_circle</span>
             <p className="text-gray-500 text-sm">No exceptions for this Lambda</p>
@@ -152,9 +166,9 @@ export default function ExceptionsPage() {
                     onClick={() => setExpandedId(expandedId === ex.id ? null : ex.id)}
                   >
                     <td className="px-4 py-3 mono text-xs font-bold text-gray-700">{ex.jobId}</td>
-                    <td className="px-4 py-3 text-red-500 font-medium text-xs">{ex.errorType}</td>
-                    <td className="px-4 py-3 text-gray-600 text-xs max-w-[320px] truncate">{ex.message}</td>
-                    <td className="px-4 py-3 text-xs text-gray-400 mono">{ex.timestamp}</td>
+                    <td className="px-4 py-3 text-red-500 font-medium text-xs">{ex.errorType || "—"}</td>
+                    <td className="px-4 py-3 text-gray-600 text-xs max-w-[320px] truncate" title={ex.errorMessage}>{ex.errorMessage || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400 mono">{formatExceptionDate(ex.occurredAt)}</td>
                     <td className="px-4 py-3">
                       <span className={cn(
                         "material-symbols-outlined text-gray-400 text-sm transition-transform duration-200",
@@ -170,15 +184,17 @@ export default function ExceptionsPage() {
                         <div className="bg-gray-950 rounded-lg m-4 p-4">
                           <div className="flex justify-between items-center mb-2">
                             <span className="text-green-400 text-xs font-mono">Stack Trace</span>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); copyTrace(ex.stackTrace); }}
-                              className="text-xs text-gray-400 hover:text-white border border-gray-700 rounded px-2 py-0.5"
-                            >
-                              Copy
-                            </button>
+                            {ex.stackTrace && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); copyTrace(ex.stackTrace); }}
+                                className="text-xs text-gray-400 hover:text-white border border-gray-700 rounded px-2 py-0.5"
+                              >
+                                Copy
+                              </button>
+                            )}
                           </div>
                           <pre className="text-green-400 text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                            {ex.stackTrace}
+                            {ex.stackTrace || "No stack trace available"}
                           </pre>
                         </div>
                       </td>
@@ -191,5 +207,13 @@ export default function ExceptionsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ExceptionsPage() {
+  return (
+    <Suspense>
+      <ExceptionsContent />
+    </Suspense>
   );
 }

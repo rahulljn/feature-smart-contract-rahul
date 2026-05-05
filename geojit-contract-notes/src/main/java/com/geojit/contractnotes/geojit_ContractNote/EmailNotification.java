@@ -141,6 +141,10 @@ public class EmailNotification implements RequestHandler<S3Event, String> {
             metadataJson.put("dematlogId", "");
             metadataJson.put("clientType", "1");
 
+            // Segment for bounce report S3 path partitioning (s3_folder value, lowercase)
+            // TODO: pass segment from job metadata when available across all segment types
+            metadataJson.put("segment", "equity");
+
             htmlTemplate = resolveTemplate(metadataJson, s3Client);
             subject = "Contract Note - Geojit Investments Ltd";
 

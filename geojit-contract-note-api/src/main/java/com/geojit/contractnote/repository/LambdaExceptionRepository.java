@@ -10,4 +10,8 @@ public interface LambdaExceptionRepository extends JpaRepository<LambdaException
     List<LambdaException> findByJobIdOrderByOccurredAtDesc(String jobId);
 
     List<LambdaException> findByJobIdAndLambdaNameOrderByOccurredAtDesc(String jobId, String lambdaName);
+
+    List<LambdaException> findByLambdaNameOrderByOccurredAtDesc(String lambdaName);
+
+    List<LambdaException> findTop100ByOrderByOccurredAtDesc();
 }

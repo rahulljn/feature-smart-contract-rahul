@@ -6,7 +6,7 @@ import type { CmsPage } from "@/types";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 
-const USE_MOCK = true;
+const USE_MOCK = false;
 const MOCK_PAGE: CmsPage = {
   id: "1", slug: "privacy-policy", title: "Privacy Policy",
   content: `Privacy Policy

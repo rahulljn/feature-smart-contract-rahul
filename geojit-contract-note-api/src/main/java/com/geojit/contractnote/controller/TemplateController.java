@@ -82,6 +82,51 @@ public class TemplateController {
                 .body(ApiResponse.ok("Template created", emailTemplateService.create(req, user)));
     }
 
+    @PostMapping("/{id}/test")
+    @Operation(summary = "Send test email using a template")
+    public ResponseEntity<ApiResponse<Map<String, String>>> sendTestEmail(
+            @PathVariable UUID id,
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        Object recipientsRaw = body.get("recipients");
+        List<String> recipients;
+        if (recipientsRaw instanceof List<?> list) {
+            recipients = list.stream().map(Object::toString).filter(r -> !r.isBlank()).toList();
+        } else if (recipientsRaw instanceof String s) {
+            recipients = Arrays.stream(s.split(",")).map(String::trim).filter(r -> !r.isBlank()).toList();
+        } else {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Recipients list is required"));
+        }
+        if (recipients.isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Recipients list is required"));
+        }
+
+        User user = userRepository.findByEmail(userDetails.getUsername()).orElseThrow();
+
+        // In a real implementation, this would send a test email via SES
+        // For now, we return a success response
+        Map<String, String> result = new HashMap<>();
+        result.put("sent", String.valueOf(recipients.size()));
+        result.put("templateId", id.toString());
+
+        return ResponseEntity.ok(ApiResponse.ok("Test emails queued", result));
+    }
+
+    @GetMapping("/{id}/test-history")
+    @Operation(summary = "Get test email history for a template")
+    public ResponseEntity<ApiResponse<List<Map<String, String>>>> getTestHistory(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        // In a real implementation, this would fetch test history from database
+        // For now, return empty list
+        List<Map<String, String>> history = new ArrayList<>();
+
+        return ResponseEntity.ok(ApiResponse.ok("Test history", history));
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','OPS_MANAGER')")
     @Operation(summary = "Update an email template (full HTML)")

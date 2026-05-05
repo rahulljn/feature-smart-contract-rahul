@@ -51,7 +51,7 @@ export default function ProcessPage() {
       const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}/jobs/${createdJob.jobId}/stream`;
       const es = new EventSource(`${url}?token=${token}`);
       sseRef.current = es;
-      es.onmessage = (e) => {
+      const handler = (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data);
           if (data.eventType) {
@@ -59,7 +59,13 @@ export default function ProcessPage() {
           }
         } catch { /* ignore */ }
       };
-      return () => { es.close(); sseRef.current = null; };
+      const SSE_EVENTS = [
+        "JOB_REGISTERED","CUSTOMER_REGISTERED","SPLIT_PROGRESS","SPLIT_COMPLETE",
+        "PDF_TRIGGERED","PDF_GENERATED","PDF_FAILED","EMAIL_SENT","EMAIL_FAILED",
+        "EMAIL_SKIPPED","DELIVERY","BOUNCE","COMPLAINT","RESEND_TRIGGERED",
+      ];
+      SSE_EVENTS.forEach(t => es.addEventListener(t, handler));
+      return () => { SSE_EVENTS.forEach(t => es.removeEventListener(t, handler)); es.close(); sseRef.current = null; };
     }
   }, [step, createdJob]);
 
@@ -168,7 +174,7 @@ export default function ProcessPage() {
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto w-full fade-up">
+    <div className="max-w-3xl mx-auto space-y-5 fade-up">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">

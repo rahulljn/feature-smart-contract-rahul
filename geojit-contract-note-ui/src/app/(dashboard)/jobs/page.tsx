@@ -2,21 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { cn, fmtDateTime } from "@/lib/utils";
 import { toast } from "sonner";
-
-const USE_MOCK = true;
-void USE_MOCK;
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const MOCK_JOBS = [
-  { jobId: "a1b2c3d4", fileName: "EQUITY_20260429.txt",    segment: "EQUITY-COMBINEMARGIN", records: 28200, status: "COMPLETED",  uploadedAt: "2 hours ago", uploadedBy: "admin@geojit.com", delivered: 26100, bounced: 640,  failed: 318  },
-  { jobId: "b2c3d4e5", fileName: "COMMODITY_20260429.txt", segment: "COMMODITY",            records: 5842,  status: "EMAILING",   uploadedAt: "3 hours ago", uploadedBy: "ops@geojit.com",   delivered: 3200,  bounced: 15,   failed: 8    },
-  { jobId: "c3d4e5f6", fileName: "DP_HOLDING_20260428.txt",segment: "DP-HOLDING",           records: 12400, status: "PROCESSING", uploadedAt: "5 hours ago", uploadedBy: "admin@geojit.com", delivered: 0,     bounced: 0,    failed: 0    },
-  { jobId: "d4e5f6a7", fileName: "PNL_20260428.txt",       segment: "PNL",                  records: 3100,  status: "FAILED",     uploadedAt: "6 hours ago", uploadedBy: "ops@geojit.com",   delivered: 0,     bounced: 0,    failed: 3100 },
-  { jobId: "e5f6a7b8", fileName: "ROS_20260427.txt",       segment: "ROS",                  records: 8500,  status: "COMPLETED",  uploadedAt: "1 day ago",   uploadedBy: "admin@geojit.com", delivered: 8320,  bounced: 92,   failed: 42   },
-  { jobId: "f6a7b8c9", fileName: "BILL_20260427.txt",      segment: "BILL",                 records: 4200,  status: "PARTIAL",    uploadedAt: "1 day ago",   uploadedBy: "ops@geojit.com",   delivered: 3900,  bounced: 210,  failed: 180  },
-];
+import { jobsApi } from "@/lib/api";
 
 const STATUS_TABS = ["All", "Running", "Completed", "Partial", "Failed"];
 const STATUS_RUNNING = ["EMAILING", "PROCESSING", "SPLITTING", "VALIDATING"];
@@ -45,39 +33,66 @@ export default function JobsPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [allJobs, setAllJobs] = useState<any[]>([]);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
 
-  const jobs = MOCK_JOBS;
+  const fetchJobs = async () => {
+    setLoading(true);
+    try {
+      const res = await jobsApi.list(page - 1, pageSize);
+      const data = res.data.data;
+      setAllJobs(data.content ?? []);
+      setTotalElements(data.totalElements ?? 0);
+      setTotalPages(data.totalPages ?? 1);
+    } catch (err) {
+      console.error("Failed to fetch jobs", err);
+      setAllJobs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const filtered = jobs.filter((j) => {
-    if (activeTab === "Running"   && !STATUS_RUNNING.includes(j.status))      return false;
-    if (activeTab === "Completed" && j.status !== "COMPLETED")                return false;
-    if (activeTab === "Partial"   && j.status !== "PARTIAL")                  return false;
-    if (activeTab === "Failed"    && j.status !== "FAILED")                   return false;
-    if (search && !j.fileName.toLowerCase().includes(search.toLowerCase()) &&
-        !j.jobId.toLowerCase().includes(search.toLowerCase()))               return false;
-    return true;
-  });
-
-  const totalPages = Math.ceil(filtered.length / pageSize);
-  const paginated  = filtered.slice((page - 1) * pageSize, page * pageSize);
-
-  const totalRuns  = jobs.length;
-  const running    = jobs.filter((j) => STATUS_RUNNING.includes(j.status)).length;
-  const completed  = jobs.filter((j) => j.status === "COMPLETED").length;
-  const partFailed = jobs.filter((j) => ["PARTIAL", "FAILED"].includes(j.status)).length;
+  useEffect(() => { fetchJobs(); }, [page, pageSize]);
 
   useEffect(() => {
-    const hasRunning = jobs.some((j) => STATUS_RUNNING.includes(j.status));
-    if (!hasRunning || USE_MOCK) return;
-    const interval = setInterval(() => {
-      // trigger refetch when real API is available
-    }, 15000);
+    const hasRunning = allJobs.some((j) => STATUS_RUNNING.includes(j.status));
+    if (!hasRunning) return;
+    const interval = setInterval(fetchJobs, 15000);
     return () => clearInterval(interval);
-  }, [jobs]);
+  }, [allJobs]);
+
+  const jobs = activeTab === "Running"   ? allJobs.filter((j) => STATUS_RUNNING.includes(j.status))
+             : activeTab === "Completed" ? allJobs.filter((j) => j.status === "COMPLETED")
+             : activeTab === "Partial"   ? allJobs.filter((j) => j.status === "PARTIAL")
+             : activeTab === "Failed"    ? allJobs.filter((j) => j.status === "FAILED")
+             : allJobs;
+
+  const filtered = jobs.filter((j) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return j.fileName?.toLowerCase().includes(q) || j.jobId?.toLowerCase().includes(q);
+  });
+
+  const totalRuns  = totalElements;
+  const running    = allJobs.filter((j) => STATUS_RUNNING.includes(j.status)).length;
+  const completed  = allJobs.filter((j) => j.status === "COMPLETED").length;
+  const partFailed = allJobs.filter((j) => ["PARTIAL", "FAILED"].includes(j.status)).length;
 
   function downloadCsv() {
-    const headers = ["Job ID","File Name","Segment","Records","Status","Delivered","Bounced","Failed","Uploaded"];
-    const rows = jobs.map((j) => [j.jobId, j.fileName, j.segment, j.records, j.status, j.delivered, j.bounced, j.failed, j.uploadedAt]);
+    const headers = ["Job ID", "File Name", "Segment", "Records", "Status", "Delivered", "Bounced", "Failed", "Uploaded"];
+    const rows = jobs.map((j) => [
+      j.jobId,
+      j.fileName,
+      j.segmentType,
+      j.totalRecords,
+      j.status,
+      j.emailDeliveredCount,
+      j.bounceCount,
+      j.emailFailedCount,
+      fmtDateTime(j.uploadedAt),
+    ]);
     const csv  = [headers, ...rows].map((r) => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url  = URL.createObjectURL(blob);
@@ -101,7 +116,10 @@ export default function JobsPage() {
             <span className="material-symbols-outlined text-[16px]">download</span>
             Download CSV
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+          <button
+            onClick={fetchJobs}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+          >
             <span className="material-symbols-outlined text-[16px]">refresh</span>
             Refresh
           </button>
@@ -184,39 +202,47 @@ export default function JobsPage() {
               </tr>
             </thead>
             <tbody>
-              {paginated.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={9} className="text-center py-12 text-gray-400 text-sm">
+                    Loading…
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="text-center py-12 text-gray-400 text-sm">
                     No jobs found
                   </td>
                 </tr>
               ) : (
-                paginated.map((j) => (
+                filtered.map((j) => (
                   <tr key={j.jobId} className="t-row">
                     <td className="px-4 py-3">
                       <Link href={`/jobs/${j.jobId}`} className="text-[#497cff] hover:underline text-sm font-medium">
                         {j.fileName}
                       </Link>
                     </td>
-                    <td className="px-4 py-3"><span className="seg-chip">{j.segment}</span></td>
-                    <td className="px-4 py-3 text-right mono text-xs">{j.records.toLocaleString()}</td>
+                    <td className="px-4 py-3"><span className="seg-chip">{j.segmentType}</span></td>
+                    <td className="px-4 py-3 text-right mono text-xs">{(j.totalRecords ?? 0).toLocaleString()}</td>
                     <td className="px-4 py-3"><StatusPill status={j.status} /></td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{j.uploadedAt}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500 truncate max-w-[140px]">{j.uploadedBy}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{fmtDateTime(j.uploadedAt)}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500 truncate max-w-[140px]">
+                      {j.uploadedBy?.name ?? j.uploadedBy?.email ?? "-"}
+                    </td>
                     <td className="px-4 py-3 text-right text-xs text-gray-700">
-                      {j.delivered.toLocaleString()}
+                      {(j.emailDeliveredCount ?? 0).toLocaleString()}
                     </td>
                     <td className="px-4 py-3 text-right text-xs">
-                      {j.bounced > 0 ? (
+                      {(j.bounceCount ?? 0) > 0 ? (
                         <Link href={`/jobs/${j.jobId}?tab=customers&filter=BOUNCED`} className="text-amber-500 hover:underline font-medium">
-                          {j.bounced.toLocaleString()}
+                          {j.bounceCount.toLocaleString()}
                         </Link>
                       ) : <span className="text-gray-300">0</span>}
                     </td>
                     <td className="px-4 py-3 text-right text-xs">
-                      {j.failed > 0 ? (
+                      {(j.emailFailedCount ?? 0) > 0 ? (
                         <Link href="/exceptions" className="text-red-500 hover:underline font-medium">
-                          {j.failed.toLocaleString()}
+                          {j.emailFailedCount.toLocaleString()}
                         </Link>
                       ) : <span className="text-gray-300">0</span>}
                     </td>
