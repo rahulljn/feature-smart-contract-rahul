@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { lambdaExceptionsApi } from "@/lib/api";
+import { lambdaExceptionsApi, jobsApi } from "@/lib/api";
 import type { LambdaException } from "@/types";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -38,6 +38,7 @@ function ExceptionsContent() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("PDF");
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [jobs, setJobs] = useState<any[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string>(searchParams.get("jobId") ?? "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +60,12 @@ function ExceptionsContent() {
       setRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    jobsApi.list(0, 50).then(res => {
+      setJobs(res.data.data?.content ?? []);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchExceptions();
@@ -92,12 +99,18 @@ function ExceptionsContent() {
       <div className="flex items-center justify-between">
         <h1 className="font-bold text-2xl text-gray-900">Exceptions</h1>
         <div className="flex items-center gap-2">
-          <input
+          <select
             value={selectedJobId}
             onChange={(e) => setSelectedJobId(e.target.value)}
-            placeholder="Filter by Job ID..."
-            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#00174b]/20 w-48"
-          />
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white text-gray-700 min-w-[260px]"
+          >
+            <option value="">All Jobs</option>
+            {jobs.map((job) => (
+              <option key={job.jobId} value={job.jobId}>
+                {job.fileName} · {new Date(job.uploadedAt).toLocaleDateString("en-GB")}
+              </option>
+            ))}
+          </select>
           <button
             onClick={handleRefresh}
             disabled={refreshing}

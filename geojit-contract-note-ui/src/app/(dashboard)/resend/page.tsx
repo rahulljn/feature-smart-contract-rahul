@@ -28,7 +28,7 @@ function ResendPageContent() {
   const { segments } = useSegments();
 
   const [from, setFrom] = useState(
-    new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]);
+    new Date(Date.now() - 365 * 86400000).toISOString().split('T')[0]);
   const [to, setTo] = useState(new Date().toISOString().split('T')[0]);
   const [segmentCode, setSegmentCode] = useState('');
   const [clientCodeSearch, setClientCodeSearch] = useState('');
@@ -44,7 +44,7 @@ function ResendPageContent() {
 
   const dateRangeValid = useMemo(() => {
     const diff = (new Date(to).getTime() - new Date(from).getTime()) / 86400000;
-    return diff >= 0 && diff <= 15;
+    return diff >= 0;
   }, [from, to]);
 
   const rowKey = useCallback((r: BounceRecord) => `${r.partyCode}_${r.fileName}`, []);
@@ -171,18 +171,19 @@ function ResendPageContent() {
 
             {/* From date */}
             <div>
-              <label className="text-xs text-slate-500 mb-1 font-bold">FROM</label>
+              <label className="text-xs text-slate-500 mb-1 font-bold">TRADE DATE FROM</label>
               <input
                 type="date"
                 value={from}
                 onChange={e => setFrom(e.target.value)}
                 className="border rounded-lg px-3 py-1.5 text-sm"
               />
+              <p className="text-xs text-gray-400 italic mt-1">Enter trade date range, not today's date</p>
             </div>
 
             {/* To date */}
             <div>
-              <label className="text-xs text-slate-500 mb-1 font-bold">TO</label>
+              <label className="text-xs text-slate-500 mb-1 font-bold">TRADE DATE TO</label>
               <input
                 type="date"
                 value={to}
@@ -218,9 +219,7 @@ function ResendPageContent() {
           </div>
 
           {!dateRangeValid && (
-            <p className="text-red-500 text-xs mt-2">
-              ⚠ Date range cannot exceed 15 days
-            </p>
+            <p className="text-red-500 text-xs mt-2">⚠ "To" date must be on or after "From" date</p>
           )}
         </div>
 

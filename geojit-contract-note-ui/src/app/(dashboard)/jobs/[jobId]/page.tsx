@@ -227,7 +227,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
                   <div className="text-[26px] font-extrabold mono text-emerald-600 leading-none">{snsDelivered.toLocaleString()}</div>
                   <div className="text-[10px] text-slate-400 mt-1.5">Confirmed by SNS delivery receipt</div>
                 </div>
-                <Link href={emailFailed > 0 ? "/exceptions" : "#"} className={cn("card p-4 block", emailFailed > 0 ? "hover:bg-orange-50 cursor-pointer transition-colors" : "")}>
+                <Link href={emailFailed > 0 ? `/exceptions?jobId=${jobId}` : "#"} className={cn("card p-4 block", emailFailed > 0 ? "hover:bg-orange-50 cursor-pointer transition-colors" : "")}>
                   <div className="text-[10px] text-orange-600 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">Email failed {emailFailed > 0 && <span className="material-symbols-outlined text-[11px] text-orange-400">open_in_new</span>}</div>
                   <div className="text-[26px] font-extrabold mono text-orange-600 leading-none">{emailFailed.toLocaleString()}</div>
                   <div className="text-[10px] text-slate-400 mt-1.5">No address or send error — never reached SES</div>
@@ -386,7 +386,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ jobId: str
                 {/* Failed branch — from PDF (NX[2]=406) curved up-right */}
                 <path d={`M 406 ${NY - NR} Q 406 65 506 65`} fill="none" stroke="#f87171" strokeWidth="1.5" strokeDasharray="4 4" />
                 <foreignObject x="510" y="48" width="120" height="26">
-                  <a href="/exceptions" style={{ display:"flex", alignItems:"center", gap:3, padding:"2px 8px", borderRadius:999, fontSize:11, fontWeight:700, background:"#fff1f2", border:"1px solid #fecaca", color:"#dc2626", whiteSpace:"nowrap", textDecoration:"none" }}>
+                  <a href={`/exceptions?jobId=${jobId}`} style={{ display:"flex", alignItems:"center", gap:3, padding:"2px 8px", borderRadius:999, fontSize:11, fontWeight:700, background:"#fff1f2", border:"1px solid #fecaca", color:"#dc2626", whiteSpace:"nowrap", textDecoration:"none" }}>
                     <span className="material-symbols-outlined" style={{ fontSize:11 }}>cancel</span>
                     Failed <span style={{ fontWeight:800, marginLeft:2 }}>{fmtN(pdfFailed)}</span>
                   </a>

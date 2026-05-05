@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { jobsApi, pipelineApi } from "@/lib/api";
+import { jobsApi, pipelineApi, useSegments } from "@/lib/api";
 import type { Job, PipelineEvent, ValidationResult } from "@/types";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -10,30 +10,14 @@ import { cn, toUtcDate } from "@/lib/utils";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 
-const SEGMENTS = [
-  "EQUITY-COMBINEMARGIN",
-  "ROS",
-  "BILL",
-  "COMMODITY",
-  "DP-HOLDING",
-  "DP-HOLDING-YEARLY",
-  "DP-LEDGER-WEEKLY",
-  "DP-TRADE-TXN",
-  "STT",
-  "PNL",
-  "AGTS",
-  "QS-LEDGER",
-  "QS-RETENTION",
-  "DMR",
-];
-
 const STEPS = ["Upload", "Configure", "Pre-flight", "Submitted"];
 
 export default function ProcessPage() {
   const qc = useQueryClient();
   const [step, setStep] = useState(0); // 0=Upload, 1=Configure, 2=Preflight, 3=Submitted
   const [file, setFile] = useState<File | null>(null);
-  const [segment, setSegment] = useState(0);
+  const [segment, setSegment] = useState<string>("");
+  const { segments, loading: segmentsLoading } = useSegments();
   const [createdJob, setCreatedJob] = useState<Job | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -115,7 +99,7 @@ export default function ProcessPage() {
     mutationFn: () => {
       const form = new FormData();
       form.append("file", file!);
-      form.append("segmentType", SEGMENTS[segment]);
+      form.append("segmentType", segment);
       return jobsApi.upload(form);
     },
     onSuccess: (res) => {
@@ -306,10 +290,15 @@ export default function ProcessPage() {
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Report type</label>
               <select
                 value={segment}
-                onChange={e => setSegment(Number(e.target.value))}
+                onChange={e => setSegment(e.target.value)}
                 className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"
               >
-                {SEGMENTS.map((s, i) => <option key={i} value={i}>{s}</option>)}
+                <option value="" disabled>Select report type</option>
+                {segmentsLoading ? (
+                  <option disabled>Loading…</option>
+                ) : (
+                  segments.map(s => <option key={s.code} value={s.code}>{s.displayName}</option>)
+                )}
               </select>
               <p className="text-[10px] text-slate-400 mt-1">Determines the PDF layout and email template used for this batch.</p>
             </div>
@@ -319,7 +308,7 @@ export default function ProcessPage() {
             <button onClick={prev} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 flex items-center gap-1.5">
               <span className="material-symbols-outlined text-base">arrow_back</span>Back
             </button>
-            <button onClick={next} className="px-5 py-2.5 bg-[#00174b] text-white rounded-xl text-sm font-bold hover:bg-[#003ea8] flex items-center gap-1.5">
+            <button onClick={next} disabled={!segment} className="px-5 py-2.5 bg-[#00174b] text-white rounded-xl text-sm font-bold hover:bg-[#003ea8] flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
               Next: Pre-flight <span className="material-symbols-outlined text-base">arrow_forward</span>
             </button>
           </div>
@@ -338,7 +327,7 @@ export default function ProcessPage() {
               </div>
               <div className="p-3.5 bg-slate-50 rounded-xl">
                 <div className="text-[10px] text-slate-400 uppercase font-bold mb-0.5">Segment</div>
-                <div className="text-sm font-semibold text-slate-800">{SEGMENTS[segment]}</div>
+                <div className="text-sm font-semibold text-slate-800">{segments.find(s => s.code === segment)?.displayName ?? segment}</div>
               </div>
               <div className="p-3.5 bg-slate-50 rounded-xl">
                 <div className="text-[10px] text-slate-400 uppercase font-bold mb-0.5">Size</div>
@@ -358,7 +347,7 @@ export default function ProcessPage() {
               </div>
               <div className="flex items-center gap-2.5 p-3 bg-emerald-50 rounded-xl">
                 <span className="material-symbols-outlined text-emerald-500 text-lg">check_circle</span>
-                <span className="text-sm text-emerald-700 font-medium">Segment selected · {SEGMENTS[segment]}</span>
+                <span className="text-sm text-emerald-700 font-medium">Segment selected · {segments.find(s => s.code === segment)?.displayName ?? segment}</span>
               </div>
             </div>
 

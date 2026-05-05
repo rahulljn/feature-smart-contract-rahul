@@ -1,69 +1,50 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { clientsApi, bounceReportApi, useSegments } from "@/lib/api";
+import { useState, useMemo } from "react";
+import { bounceReportApi, useSegments } from "@/lib/api";
 import type { BounceRecord, Segment } from "@/types";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronRight, Download, Search, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { downloadCsv } from "@/lib/export";
-import { Download, Search } from "lucide-react";
 import { toast } from "sonner";
-import Link from "next/link";
 
-/** Normalises party codes that arrive as "ZYG063/ZYG063" → "ZYG063" */
-const normaliseCode = (code: string) => code?.split("/")[0] ?? code;
+function BounceBadge({ type }: { type: string }) {
+  const map: Record<string, string> = {
+    Permanent: "bg-red-100 text-red-700",
+    Transient: "bg-amber-100 text-amber-700",
+    Complaint: "bg-purple-100 text-purple-700",
+  };
+  return (
+    <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", map[type] || "text-gray-400")}>
+      {type || "—"}
+    </span>
+  );
+}
 
 export default function ClientsPage() {
   const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(
+    new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0]
+  );
+  const [toDate, setToDate] = useState(new Date().toISOString().split("T")[0]);
   const [segment, setSegment] = useState("");
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
   const [bounceRecords, setBounceRecords] = useState<BounceRecord[]>([]);
   const [bounceLoading, setBounceLoading] = useState(false);
-  const [downloadingBounce, setDownloadingBounce] = useState<string | null>(null);
-  const comboRef = useRef<HTMLDivElement>(null);
-
-  const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["client-search", query, fromDate, toDate, segment],
-    queryFn: () => clientsApi.search(query, fromDate || undefined, toDate || undefined, segment || undefined),
-    enabled: query.trim().length >= 2,
-  });
-
-  const { data: allCodesData } = useQuery({
-    queryKey: ["client-codes"],
-    queryFn: () => clientsApi.allCodes(),
-    staleTime: 5 * 60 * 1000,
-  });
+  const [downloadingBounce, setDownloadingBounce] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   const { segments, loading: segmentsLoading } = useSegments();
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (comboRef.current && !comboRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
-      }
-    }
-    if (showDropdown) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showDropdown]);
+  const dateRangeValid = useMemo(() => {
+    if (!fromDate || !toDate) return true;
+    const diff = (new Date(toDate).getTime() - new Date(fromDate).getTime()) / 86400000;
+    return diff >= 0;
+  }, [fromDate, toDate]);
 
-  const allCodes: string[] = useMemo(() => {
-    const raw = allCodesData?.data;
-    return Array.isArray(raw) ? raw : [];
-  }, [allCodesData]);
-
-  const suggestions: string[] = useMemo(() => {
-    if (!search.trim()) return allCodes.slice(0, 10);
-    const lower = search.toLowerCase();
-    return allCodes.filter(c => c.toLowerCase().includes(lower)).slice(0, 10);
-  }, [search, allCodes]);
+  const rowKey = (r: BounceRecord) => `${r.partyCode}_${r.fileName}`;
 
   const bounceBreakdown = useMemo(() => {
-    const bounced = bounceRecords.filter(c => c.bounceType);
+    const bounced = bounceRecords.filter((c) => c.bounceType);
     if (bounced.length === 0) return [];
     const grouped: Record<string, number> = {};
     for (const c of bounced) {
@@ -82,34 +63,27 @@ export default function ClientsPage() {
       }));
   }, [bounceRecords]);
 
-  const handleSearch = () => {
-    if (search.trim().length < 2) { toast.warning("Enter at least 2 characters"); return; }
-    setQuery(search);
-    setRecentSearches(prev => [search, ...prev.filter(s => s !== search)].slice(0, 4));
-    setBounceRecords([]);
-    toast.dismiss();
-  };
-
-  const clearFilters = () => {
-    setFromDate("");
-    setToDate("");
-    setSegment("");
-    setBounceRecords([]);
-  };
-
   const handleLoadBounceReport = async () => {
-    if (search.trim().length < 2) {
-      toast.warning("Enter a client code to load their bounce report");
-      return;
-    }
-
+    if (!dateRangeValid) return;
     setBounceLoading(true);
+    setSearched(false);
     try {
-      const res = await bounceReportApi.getClientRecords(
-        search.trim(),
-        { from: fromDate || undefined, to: toDate || undefined, segment: segment || undefined }
-      );
-      setBounceRecords(res.data?.data ?? []);
+      if (search.trim().length >= 2) {
+        const res = await bounceReportApi.getClientRecords(search.trim(), {
+          from: fromDate || undefined,
+          to: toDate || undefined,
+          segment: segment || undefined,
+        });
+        setBounceRecords(res.data?.data ?? []);
+      } else {
+        const res = await bounceReportApi.list({
+          from: fromDate || undefined,
+          to: toDate || undefined,
+          segment: segment || undefined,
+        });
+        setBounceRecords(res.data?.data?.records ?? []);
+      }
+      setSearched(true);
     } catch {
       toast.error("Failed to load bounce records");
     } finally {
@@ -118,46 +92,26 @@ export default function ClientsPage() {
   };
 
   const handleDownloadBounceReport = async () => {
-    if (search.trim().length < 2) {
-      toast.warning("Enter a client code to download their bounce report");
-      return;
-    }
-
-    setDownloadingBounce(search.trim());
-
+    setDownloadingBounce(true);
     try {
-      const today = new Date();
-      const weekAgo = new Date(today.getTime() - 7 * 86400000);
-      const fromDateStr = weekAgo.toISOString().split('T')[0];
-      const toDateStr = today.toISOString().split('T')[0];
-      const params: Record<string, string> = {
-        from: fromDateStr,
-        to: toDateStr,
-      };
-      if (segment) params.segment = segment;
-
-      downloadCsv(`BounceReport_${fromDateStr}_${toDateStr}.csv`,
-        ["CLIENT CODE", "CLIENT NAME", "CLIENT EMAIL", "ACTIVITY DATE", "CONTRACT NO", "TRADE DATE", "BO TYPE", "BO REASON", "FILE NAME", "RECORD DATE"],
-        bounceRecords.map(r => [r.partyCode, r.clientName, r.clientEmail, r.activityDate, r.contractNo, r.tradeDate, r.bounceType, r.bounceReason, r.fileName, r.recordDate])
-      );
+      const res = await bounceReportApi.downloadAll({
+        from: fromDate || undefined,
+        to: toDate || undefined,
+        segment: segment || undefined,
+      });
+      const url = URL.createObjectURL(new Blob([res.data as BlobPart], { type: "text/csv" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `BounceReport_${fromDate || "all"}_${toDate || "all"}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
       toast.success("Bounce report downloaded");
     } catch {
       toast.error("Failed to download bounce report");
     } finally {
-      setDownloadingBounce(null);
+      setDownloadingBounce(false);
     }
   };
-
-  const handleClientCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearch(e.target.value.toUpperCase());
-  };
-
-  const handleSegmentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSegment(e.target.value);
-  };
-
-  const clientProfile = data?.data?.data as { partyCode: string; clientDetails: Record<string, string>; processHistory: { email?: string }[]; totalContracts: number } | undefined;
-  const clients = clientProfile ? [clientProfile] : [];
 
   return (
     <div className="space-y-5 fade-up">
@@ -165,249 +119,283 @@ export default function ClientsPage() {
       <div className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-10">
         <h2 className="text-xl font-extrabold text-slate-900 headline">Client 360</h2>
         <p className="text-slate-500 text-[12px] mt-0.5">
-          Search by client code to view their full contract note delivery history and bounce reports.
+          Search bounce logs from S3 by date range, client code, and segment.
         </p>
       </div>
 
       <div className="p-6 space-y-6">
-        {/* Search card */}
-        <div className="card p-5 space-y-4">
-          <div className="flex gap-2">
-            <div ref={comboRef} className="relative flex-1">
-              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
-              <input
-                value={search}
-                onChange={handleClientCodeChange}
-                onKeyDown={e => { if (e.key === "Enter") { setShowDropdown(false); handleSearch(); } if (e.key === "Escape") setShowDropdown(false); }}
-                onFocus={() => setShowDropdown(true)}
-                className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#497cff]/30"
-                placeholder="Type or select a client code…"
-                autoComplete="off"
-              />
-              {showDropdown && suggestions.length > 0 && (
-                <ul className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 overflow-hidden">
-                  {suggestions.map(code => (
-                    <li
-                      key={code}
-                      onMouseDown={() => { setSearch(code); setQuery(code); setShowDropdown(false); setRecentSearches(prev => [code, ...prev.filter(s => s !== code)].slice(0, 4)); }}
-                      className="px-4 py-2.5 text-sm mono text-slate-700 hover:bg-blue-50 hover:text-[#003ea8] cursor-pointer flex items-center gap-2"
-                    >
-                      <span className="material-symbols-outlined text-slate-400 text-base">person</span>
-                      {code}
-                    </li>
-                  ))}
-                </ul>
-              )}
+        {/* Bounce Report Download section */}
+        <div className="card p-5">
+          <div>
+            <div className="text-base font-semibold text-slate-900">Bounce Report</div>
+            <div className="text-xs text-gray-400 mt-0.5">
+              Load bounce logs from S3 by date range and segment
             </div>
-            <button
-              onClick={() => { setShowDropdown(false); handleSearch(); }}
-              className="px-5 py-3 bg-[#00174b] text-white rounded-xl text-sm font-bold hover:bg-[#003ea8] flex items-center gap-2 flex-shrink-0"
-            >
-              <span className="material-symbols-outlined text-base">search</span>Search
-            </button>
           </div>
-          {recentSearches.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Recent:</span>
-              {recentSearches.map(s => (
-                <button
-                  key={s}
-                  onClick={() => { setSearch(s); setQuery(s); }}
-                  className="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-[#003ea8] text-slate-600 rounded-lg text-[11px] font-semibold mono"
-                >
-                  {s}
-                </button>
-              ))}
+          <div className="flex items-end gap-3 mt-4 flex-wrap">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">
+                CLIENT CODE
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. ZYR175"
+                value={search}
+                onChange={(e) => setSearch(e.target.value.toUpperCase())}
+                onKeyDown={(e) => { if (e.key === "Enter") handleLoadBounceReport(); }}
+                className="border rounded-lg px-3 py-1.5 text-sm w-40 font-mono uppercase"
+              />
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                Optional — leave blank to search all clients
+              </p>
             </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">
+                TRADE DATE FROM
+              </label>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="border rounded-lg px-3 py-1.5 text-sm"
+              />
+              <p className="text-xs text-gray-400 italic mt-1">Enter trade date range, not today's date</p>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">
+                TRADE DATE TO
+              </label>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="border rounded-lg px-3 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">
+                SEGMENT
+              </label>
+              <select
+                value={segment}
+                onChange={(e) => setSegment(e.target.value)}
+                className="border rounded-lg px-3 py-2 bg-white text-sm"
+              >
+                <option value="">All Segments</option>
+                {segmentsLoading ? (
+                  <option disabled>Loading...</option>
+                ) : (
+                  segments.map((s: Segment) => (
+                    <option key={s.code} value={s.code}>
+                      {s.displayName}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleLoadBounceReport}
+                disabled={bounceLoading || !dateRangeValid}
+                className="px-4 py-2 bg-[#00174b] text-white rounded-lg text-sm font-bold hover:bg-[#003ea8] disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {bounceLoading ? (
+                  <Loader2 className="animate-spin h-3.5 w-3.5" />
+                ) : (
+                  <Search className="h-3.5 w-4" />
+                )}
+                Load Report
+              </button>
+              <button
+                onClick={handleDownloadBounceReport}
+                disabled={downloadingBounce || !dateRangeValid}
+                className="px-4 py-2 border border-[#00174b] text-[#00174b] rounded-lg text-sm font-bold hover:bg-[#00174b]/10 disabled:opacity-50 transition flex items-center gap-1.5"
+              >
+                {downloadingBounce ? (
+                  <Loader2 className="animate-spin h-3.5 w-3.5" />
+                ) : (
+                  <Download className="h-3.5 w-4" />
+                )}
+                Download CSV
+              </button>
+            </div>
+          </div>
+
+          {!dateRangeValid && (
+            <p className="text-red-500 text-xs mt-2">⚠ "To" date must be on or after "From" date</p>
           )}
         </div>
 
-        {/* Optional filters */}
-        <div className="border-t border-slate-100 pt-4 grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
-          <div className="col-span-2 text-[10px] text-slate-400 -mb-1">
-            Date range filters by job processing date (not trade date)
-          </div>
-          <div>
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Job Date From</label>
-            <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
-          </div>
-          <div>
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Job Date To</label>
-            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
-          </div>
-          <div>
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Segment</label>
-            <select value={segment} onChange={handleSegmentChange} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium">
-              <option value="">All segments</option>
-              {segmentsLoading ? <option disabled>Loading...</option> : segments.map((s: Segment) => (
-                <option key={s.code} value={s.code}>{s.displayName}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleSearch}
-              className="flex-1 px-3 py-2.5 bg-[#00174b] text-white rounded-xl text-sm font-bold hover:bg-[#003ea8] flex items-center justify-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-base">filter_alt</span>Apply
-            </button>
-            <button onClick={clearFilters} className="px-3 py-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-sm hover:bg-slate-50 flex items-center justify-center">
-              <span className="material-symbols-outlined text-sm">close</span>Clear
-            </button>
-          </div>
-        </div>
-
-        {/* Search results */}
-        {!query ? (
-          <div className="card p-12 text-center">
-            <span className="material-symbols-outlined text-5xl text-slate-200">person_search</span>
-            <div className="text-slate-400 font-semibold mt-3 text-sm">Search by client code</div>
-            <div className="text-[11px] text-slate-300 mt-1">Try: 8000274</div>
-          </div>
-        ) : isFetching || isLoading ? (
-          <div className="flex justify-center py-12"><Loader2 className="animate-spin text-[#00174b]" /></div>
-        ) : (
-          <div className="space-y-4">
-            {clients.length === 0 ? (
-              <div className="card p-12 text-center">
-                <span className="material-symbols-outlined text-4xl text-slate-300">person_search</span>
-                <div className="text-slate-400 font-semibold mt-3 text-sm">No client found for <span className="mono font-bold text-slate-700">{query}</span></div>
-              </div>
-            ) : (
-              clients.map((c: any) => (
-                <div key={c.partyCode} className="card p-5 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#00174b] to-[#003ea8] text-white flex items-center justify-center font-bold text-sm">
-                      {c.partyCode.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-slate-900">{c.clientDetails?.name ?? c.partyCode}</div>
-                      <div className="text-[11px] text-slate-500 mono">{c.clientDetails?.email ?? c.processHistory?.[0]?.email ?? "—"}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="pill pill-ok">{c.totalContracts} contracts</span>
-                    <Link href={`/clients/${c.partyCode}`} className="px-3 py-1.5 bg-[#00174b] text-white rounded-lg text-[11px] font-bold hover:bg-[#003ea8]">View profile</Link>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* Bounce breakdown — shows bounce breakdown from search results */}
+        {/* Bounce breakdown card — shown after loading */}
         {bounceRecords.length > 0 && (
           <div className="card p-6">
             <div className="flex items-center gap-3 mb-5">
-              <div className="p-2.5 bg-rose-50 rounded-xl"><span className="material-symbols-outlined text-rose-600">mail_off</span></div>
+              <div className="p-2.5 bg-rose-50 rounded-xl">
+                <span className="material-symbols-outlined text-rose-600">mail_off</span>
+              </div>
               <div>
                 <div className="font-bold text-slate-900 headline">Bounce & Failure Digest</div>
                 <div className="text-[11px] text-slate-500">
                   {bounceBreakdown.length > 0
-                    ? `${bounceRecords.filter(c => c.bounceType).length} bounced deliveries recorded for ${search}`
-                    : `No bounces recorded for ${search}`}
+                    ? `${bounceRecords.filter((c) => c.bounceType).length} bounced deliveries recorded${search ? ` for ${search}` : ""}`
+                    : `No bounces recorded${search ? ` for ${search}` : ""}`}
                 </div>
               </div>
             </div>
             {bounceBreakdown.length > 0 ? (
               <div className="space-y-2.5">
-                {bounceBreakdown.map(b => (
+                {bounceBreakdown.map((b) => (
                   <div key={b.label}>
                     <div className="flex justify-between text-[12px] mb-1">
                       <span className="font-semibold text-slate-800">{b.label}</span>
                       <span className="mono text-slate-600 font-bold">{b.count}</span>
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full">
-                      <div className={cn("h-2 rounded-full", b.color)} style={{ width: `${b.pct}%` }} />
+                      <div
+                        className={cn("h-2 rounded-full", b.color)}
+                        style={{ width: `${b.pct}%` }}
+                      />
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center text-slate-400 py-4 text-sm">All deliveries were successful — no bounces recorded</div>
+              <div className="text-center text-slate-400 py-4 text-sm">
+                All deliveries were successful — no bounces recorded
+              </div>
             )}
           </div>
         )}
 
-        {/* Bounce Report Download section */}
-        <div className="card p-5 mt-6">
-          <div>
-            <div className="text-base font-semibold text-slate-900">Bounce Report Download</div>
-            <div className="text-xs text-gray-400 mt-0.5">
-              Download bounce logs from S3 by date range and segment
-            </div>
-          </div>
-          <div className="flex items-end gap-3 mt-4 flex-wrap">
-            <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">CLIENT CODE</label>
-              <input
-                type="text"
-                placeholder="e.g. ZYR175"
-                value={search}
-                onChange={handleClientCodeChange}
-                className="border rounded-lg px-3 py-1.5 text-sm w-40 font-mono uppercase"
-              />
-              <p className="text-[10px] text-gray-400 mt-0.5">
-                Required for bounce report download
+        {/* Results table */}
+        {(searched || bounceRecords.length > 0) && (
+          <div className="card rounded-xl border overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+              <p className="text-sm text-slate-500">
+                {search
+                  ? `Results for ${search} — ${bounceRecords.length} record(s)`
+                  : `${bounceRecords.length} bounce records found`}
               </p>
             </div>
-            <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">FROM</label>
-              <input
-                type="date"
-                value={fromDate}
-                onChange={e => setFromDate(e.target.value)}
-                className="border rounded-lg px-3 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">TO</label>
-              <input
-                type="date"
-                value={toDate}
-                onChange={e => setToDate(e.target.value)}
-                className="border rounded-lg px-3 py-1.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">SEGMENT</label>
-              <select
-                value={segment}
-                onChange={handleSegmentChange}
-                className="border rounded-lg px-3 py-2 bg-white text-sm"
-              >
-                <option value="">All segments</option>
-                {segmentsLoading ? <option disabled>Loading...</option> : segments.map((s: Segment) => (
-                  <option key={s.code} value={s.code}>{s.displayName}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleLoadBounceReport}
-                disabled={search.trim().length < 2 || bounceLoading}
-                className="px-4 py-2 bg-[#00174b] text-white rounded-lg text-sm font-bold hover:bg-[#003ea8] disabled:opacity-50 flex items-center gap-1.5"
-              >
-                {bounceLoading ? <Loader2 className="animate-spin h-3.5 w-3.5" /> : <Search className="h-3.5 w-4" />}
-                Load Report
-              </button>
-              <button
-                onClick={handleDownloadBounceReport}
-                disabled={!!downloadingBounce || bounceRecords.length === 0}
-                className="px-4 py-2 border border-[#00174b] text-[#00174b] rounded-lg text-sm font-bold hover:bg-[#00174b]/10 disabled:opacity-50 transition flex items-center gap-1.5"
-              >
-                {downloadingBounce ? <Loader2 className="animate-spin h-3.5 w-3.5" /> : <Download className="h-3.5 w-4" />}
-                Download CSV
-              </button>
-            </div>
-          </div>
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500">
+                  <th className="px-4 py-3 text-left">CLIENT</th>
+                  <th className="px-4 py-3 text-left">EMAIL</th>
+                  <th className="px-4 py-3 text-left">TRADE DATE</th>
+                  <th className="px-4 py-3 text-left">BO TYPE</th>
+                  <th className="px-4 py-3 text-left">FILE</th>
+                  <th className="w-10 px-3 py-3">›</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bounceLoading ? (
+                  [...Array(4)].map((_, i) => (
+                    <tr key={i}>
+                      <td colSpan={6} className="py-4">
+                        <div className="flex justify-center">
+                          <Loader2 className="animate-spin text-slate-400 h-5 w-5" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : bounceRecords.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12">
+                      <div className="flex flex-col items-center gap-3 text-slate-400">
+                        <Inbox className="h-10 w-10" />
+                        <div className="text-center">
+                          <p className="text-slate-500 font-semibold">No bounce records found</p>
+                          <p className="text-sm text-slate-400">
+                            Try adjusting the date range, client code, or segment
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  bounceRecords.map((record) => (
+                    <>
+                      <tr
+                        key={rowKey(record)}
+                        className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
+                      >
+                        <td className="px-4 py-3 font-mono text-sm text-[#497cff]">
+                          {record.partyCode}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600 truncate max-w-[260px]">
+                          {record.clientEmail}
+                        </td>
+                        <td className="px-4 py-3 text-sm">{record.tradeDate}</td>
+                        <td className="px-4 py-3">
+                          <BounceBadge type={record.bounceType} />
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-400 truncate max-w-[160px]">
+                          {record.fileName}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <button
+                            onClick={() =>
+                              setExpandedRow(expandedRow === rowKey(record) ? null : rowKey(record))
+                            }
+                            className="text-slate-400 hover:text-slate-600"
+                          >
+                            <ChevronRight
+                              className={cn(
+                                "h-5 w-5 transition-transform",
+                                expandedRow === rowKey(record) && "rotate-90"
+                              )}
+                            />
+                          </button>
+                        </td>
+                      </tr>
 
-          {fromDate && toDate && (toDate as any) - (fromDate as any) > 15 * 86400000 && (
-            <p className="text-red-500 text-xs mt-2">
-              ⚠ Date range cannot exceed 15 days
-            </p>
-          )}
-        </div>
+                      {expandedRow === rowKey(record) && (
+                        <tr key={`${rowKey(record)}-expanded`}>
+                          <td colSpan={6} className="p-0">
+                            <div className="bg-blue-50/30 px-6 py-4 border-b border-blue-100">
+                              <div className="grid grid-cols-3 gap-x-8 gap-y-3 text-sm">
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-0.5">CLIENT NAME</p>
+                                  <p className="font-medium">{record.clientName || "—"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-0.5">ACTIVITY DATE</p>
+                                  <p>{record.activityDate || "—"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-0.5">CONTRACT NO</p>
+                                  <p className="font-mono">{record.contractNo || "—"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-0.5">BO REASON</p>
+                                  <p>{record.bounceReason || "—"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-0.5">SEGMENT</p>
+                                  <p>{record.segment?.toUpperCase() || "—"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-0.5">S3 FILE</p>
+                                  <p
+                                    className="font-mono text-xs text-slate-400 truncate"
+                                    title={record.s3Key}
+                                  >
+                                    {record.s3Key?.split("/").pop() || "—"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
