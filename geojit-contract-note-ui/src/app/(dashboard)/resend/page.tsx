@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { bounceReportApi, useSegments } from "@/lib/api";
 import type { BounceRecord, Segment } from "@/types";
-import { cn, fmtDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { downloadCsv } from "@/lib/export";
 import { toast } from "sonner";
-import { ArrowUpDown, ChevronRight, RefreshCw, Check, Download, Search, Inbox, Send } from "lucide-react";
+import { ChevronRight, RefreshCw, Check, Download, Search, Inbox, Send } from "lucide-react";
 
 function BounceBadge({ type }: { type: string }) {
   const map: Record<string, string> = {
@@ -24,17 +24,15 @@ function BounceBadge({ type }: { type: string }) {
 }
 
 function ResendPageContent() {
-  const qc = useQueryClient();
   const { segments } = useSegments();
 
   const [from, setFrom] = useState(
-    new Date(Date.now() - 365 * 86400000).toISOString().split('T')[0]);
+    new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0]);
   const [to, setTo] = useState(new Date().toISOString().split('T')[0]);
   const [segmentCode, setSegmentCode] = useState('');
   const [clientCodeSearch, setClientCodeSearch] = useState('');
   const [records, setRecords] = useState<BounceRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
@@ -56,16 +54,9 @@ function ResendPageContent() {
 
   const totalPages = Math.max(1, Math.ceil(records.length / pageSize));
 
-  const bounceTypeLabel: Record<string, string> = {
-    'Permanent': 'bg-red-100 text-red-700',
-    'Transient': 'bg-amber-100 text-amber-700',
-    'Complaint': 'bg-purple-100 text-purple-700',
-  };
-
   const handleSearch = async () => {
     if (!dateRangeValid) return;
     setLoading(true);
-    setError(null);
     try {
       if (clientCodeSearch.trim()) {
         const res = await bounceReportApi.getClientRecords(clientCodeSearch.trim(), { from, to, segment: segmentCode || undefined });
@@ -74,8 +65,7 @@ function ResendPageContent() {
         const res = await bounceReportApi.list({ from, to, segment: segmentCode || undefined });
         setRecords(res.data?.data?.records ?? []);
       }
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Failed to load bounce records');
+    } catch {
       toast.error('Failed to load bounce records');
     } finally {
       setLoading(false);
@@ -145,33 +135,33 @@ function ResendPageContent() {
     <>
       {/* Sticky header */}
       <div className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-10">
-        <h1 className="text-2xl font-bold text-slate-900">Bulk Resend</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
+        <h2 className="text-xl font-extrabold text-slate-900 headline">Bulk Resend</h2>
+        <p className="text-[12px] text-slate-500 mt-0.5">
           Resend bounced emails — sourced from S3 bounce logs
         </p>
       </div>
 
       <div className="p-6 space-y-5">
         {/* Filter card */}
-        <div className="card p-4 mb-5">
+        <div className="card p-5">
           <div className="flex items-end gap-3 flex-wrap">
             {/* Client Code */}
             <div>
-              <label className="text-xs text-slate-500 mb-1 font-bold">CLIENT CODE</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">CLIENT CODE</label>
               <input
                 type="text"
                 placeholder="e.g. ZYR175 (optional)"
                 value={clientCodeSearch}
                 onChange={e => setClientCodeSearch(e.target.value.toUpperCase())}
-                className="border rounded-lg px-3 py-1.5 text-sm w-40 font-mono" />
-              <p className="text-[10px] text-gray-400 mt-0.5">
+                className="border rounded-lg px-3 py-1.5 text-sm w-40 font-mono uppercase" />
+              <p className="text-xs text-gray-400 mt-1">
                 Leave blank to search all clients
               </p>
             </div>
 
             {/* From date */}
             <div>
-              <label className="text-xs text-slate-500 mb-1 font-bold">TRADE DATE FROM</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">TRADE DATE FROM</label>
               <input
                 type="date"
                 value={from}
@@ -183,37 +173,39 @@ function ResendPageContent() {
 
             {/* To date */}
             <div>
-              <label className="text-xs text-slate-500 mb-1 font-bold">TRADE DATE TO</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">TRADE DATE TO</label>
               <input
                 type="date"
                 value={to}
                 onChange={e => setTo(e.target.value)}
                 className="border rounded-lg px-3 py-1.5 text-sm"
               />
+              <p className="text-xs mt-1 invisible" aria-hidden="true">–</p>
             </div>
 
             {/* Segment dropdown */}
             <div>
-              <label className="text-xs text-slate-500 mb-1 font-bold">SEGMENT</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">SEGMENT</label>
               <select
                 value={segmentCode}
                 onChange={e => setSegmentCode(e.target.value)}
-                className="border rounded-lg px-3 py-1.5 text-sm bg-white"
+                className="border rounded-lg px-3 py-1.5 bg-white text-sm"
               >
                 <option value="">All Segments</option>
                 {segments.map((s: Segment) => (
                   <option key={s.code} value={s.code}>{s.displayName}</option>
                 ))}
               </select>
+              <p className="text-xs mt-1 invisible" aria-hidden="true">–</p>
             </div>
 
             {/* Search button */}
             <button
               onClick={handleSearch}
               disabled={!dateRangeValid || loading}
-              className="bg-[#00174b] text-white rounded-lg px-4 py-2 text-sm flex items-center gap-2 hover:bg-[#003ea8] disabled:opacity-50"
+              className="px-4 py-2 bg-[#00174b] text-white rounded-lg text-sm font-bold hover:bg-[#003ea8] disabled:opacity-50 flex items-center gap-1.5"
             >
-              {loading ? <RefreshCw className="animate-spin h-4 w-4" /> : <Search className="h-4 w-4" />}
+              {loading ? <RefreshCw className="animate-spin h-3.5 w-3.5" /> : <Search className="h-3.5 w-4" />}
               Search
             </button>
           </div>
@@ -261,9 +253,9 @@ function ResendPageContent() {
                   ["CLIENT CODE", "CLIENT NAME", "CLIENT EMAIL", "TRADE DATE", "BO TYPE", "BO REASON", "FILE NAME", "RECORD DATE"],
                   records.map(r => [r.partyCode, r.clientName, r.clientEmail, r.tradeDate, r.bounceType, r.bounceReason, r.fileName, r.recordDate]));
               }}
-              className="border border-[#00174b] text-[#00174b] rounded-lg px-3 py-1.5 text-sm hover:bg-[#00174b]/10"
+              className="border border-[#00174b] text-[#00174b] rounded-lg px-3 py-1.5 text-sm font-bold hover:bg-[#00174b]/10 flex items-center gap-1.5"
             >
-              <Download className="h-4 w-4" />
+              <Download className="h-3.5 w-4" />
               Download CSV
             </button>
           </div>
@@ -299,7 +291,7 @@ function ResendPageContent() {
                 <tr>
                   <td colSpan={8} className="py-12">
                     <div className="flex flex-col items-center gap-3 text-slate-400">
-                      <Inbox className="h-12 w-12" />
+                      <Inbox className="h-10 w-10" />
                       <div className="text-center">
                         <p className="text-slate-500 font-semibold">No bounce records found</p>
                         <p className="text-sm text-slate-400">
@@ -408,7 +400,7 @@ function ResendPageContent() {
                             <div>
                               <p className="text-xs text-slate-400 mb-0.5">S3 FILE</p>
                               <p className="font-mono text-xs text-slate-400 truncate" title={record.s3Key}>
-                                {record.s3Key.split('/').pop()}
+                                {record.s3Key?.split('/').pop() || '—'}
                               </p>
                             </div>
                           </div>

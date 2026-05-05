@@ -5,6 +5,7 @@ import com.geojit.contractnote.dto.response.*;
 import com.geojit.contractnote.entity.*;
 import com.geojit.contractnote.repository.JobCustomerRepository;
 import com.geojit.contractnote.repository.UserRepository;
+import com.geojit.contractnote.service.AuditService;
 import com.geojit.contractnote.service.CloudWatchService;
 import com.geojit.contractnote.service.FileValidationService;
 import com.geojit.contractnote.service.JobService;
@@ -54,6 +55,7 @@ public class JobController {
     private final UserRepository          userRepository;
     private final FileValidationService   fileValidationService;
     private final JobCustomerRepository   jobCustomerRepository;
+    private final AuditService            auditService;
 
     // SSE emitters keyed by jobId — supports concurrent listeners
     private final ConcurrentHashMap<UUID, CopyOnWriteArrayList<SseEmitter>> emitters =
@@ -68,12 +70,18 @@ public class JobController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "segmentType", defaultValue = "EQUITY-COMBINEMARGIN") String segmentType,
             @RequestParam(value = "tradeDate", required = false) String tradeDate,
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal UserDetails userDetails,
+            HttpServletRequest request) {
 
         validateUploadedFile(file);
 
         User user = userRepository.findByEmail(userDetails.getUsername()).orElseThrow();
         JobResponse job = jobService.uploadAndCreateJob(file, segmentType, tradeDate, user);
+        auditService.log(user, AuditLog.AuditAction.UPLOAD, "Job:" + job.getJobId(),
+                Map.of("fileName", job.getFileName() != null ? job.getFileName() : "",
+                        "jobId", job.getJobId().toString(),
+                        "segmentType", segmentType),
+                request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Job created and pipeline triggered", job));
     }

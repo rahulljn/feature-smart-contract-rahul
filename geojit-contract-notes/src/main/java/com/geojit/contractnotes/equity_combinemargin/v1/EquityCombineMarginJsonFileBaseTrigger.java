@@ -7,9 +7,12 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.event.S3EventNotification;
 import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
+import java.util.HashMap;
+import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.geojit.contractnotes.equity_combinemargin.v1.DTO.EquityDtoV2;
 import com.geojit.contractnotes.equity_combinemargin.v1.Model.CAHeaderTypeModel;
@@ -217,7 +220,14 @@ public class EquityCombineMarginJsonFileBaseTrigger implements RequestHandler<S3
                 System.out.println("  → Key: " + pdfKey);
                 System.out.println("  → Size: " + pdfFile.length() + " bytes");
 
-                s3Client.putObject(new PutObjectRequest(PDF_BUCKET, pdfKey, pdfFile));
+                Map<String, String> userMeta = new HashMap<>();
+                userMeta.put("partycode", safe(customer.getPartycode()));
+                userMeta.put("email",     safe(customer.getEmail()));
+                userMeta.put("tradedate", safe(customer.getTransactionDate()));
+                userMeta.put("contractno", safe(customer.getContractNo()));
+                ObjectMetadata pdfMeta = new ObjectMetadata();
+                pdfMeta.setUserMetadata(userMeta);
+                s3Client.putObject(new PutObjectRequest(PDF_BUCKET, pdfKey, pdfFile).withMetadata(pdfMeta));
 
                 System.out.println("[Trigger] ✓ PDF uploaded successfully to S3");
             } else {
@@ -257,6 +267,10 @@ public class EquityCombineMarginJsonFileBaseTrigger implements RequestHandler<S3
     // ═══════════════════════════════════════════════════════════════════
     //  UTILITY METHODS
     // ═══════════════════════════════════════════════════════════════════
+
+    private static String safe(String s) {
+        return s != null ? s.trim() : "";
+    }
 
     /**
      * Returns the list itself or an empty mutable list when null

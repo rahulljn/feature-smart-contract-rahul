@@ -124,34 +124,48 @@ public class PipelineService {
                 .ifPresent(jc -> {
                     switch (event.getEventType()) {
                         case PDF_GENERATED -> {
-                            jc.setPdfStatus(JobCustomer.PdfStatus.GENERATED);
-                            jc.setPdfGeneratedAt(event.getEventTimestamp());
-                            Object key = event.getPayload() != null ? event.getPayload().get("s3Key") : null;
-                            if (key != null) jc.setPdfS3Key(key.toString());
-                            jobRepository.incrementPdfGeneratedCount(event.getJobId());
+                            if (jc.getPdfStatus() != JobCustomer.PdfStatus.GENERATED) {
+                                jc.setPdfStatus(JobCustomer.PdfStatus.GENERATED);
+                                jc.setPdfGeneratedAt(event.getEventTimestamp());
+                                Object key = event.getPayload() != null ? event.getPayload().get("s3Key") : null;
+                                if (key != null) jc.setPdfS3Key(key.toString());
+                                jobRepository.incrementPdfGeneratedCount(event.getJobId());
+                            }
                         }
                         case PDF_FAILED -> {
-                            jc.setPdfStatus(JobCustomer.PdfStatus.FAILED);
-                            jobRepository.incrementFailedCount(event.getJobId());    // keep — used by checkAndCompleteJob
-                            jobRepository.incrementPdfFailedCount(event.getJobId()); // for UI display
+                            if (jc.getPdfStatus() != JobCustomer.PdfStatus.FAILED) {
+                                jc.setPdfStatus(JobCustomer.PdfStatus.FAILED);
+                                jobRepository.incrementFailedCount(event.getJobId());
+                                jobRepository.incrementPdfFailedCount(event.getJobId());
+                            }
                         }
                         case EMAIL_SENT -> {
-                            jc.setEmailStatus(JobCustomer.EmailStatus.SENT);
-                            jc.setEmailSentAt(event.getEventTimestamp());
-                            Object msgId = event.getPayload() != null ? event.getPayload().get("sesMessageId") : null;
-                            if (msgId != null) jc.setSesMessageId(msgId.toString());
-                            jobRepository.incrementEmailSentCount(event.getJobId());
+                            if (jc.getEmailStatus() != JobCustomer.EmailStatus.SENT
+                                    && jc.getEmailStatus() != JobCustomer.EmailStatus.DELIVERED
+                                    && jc.getEmailStatus() != JobCustomer.EmailStatus.BOUNCED
+                                    && jc.getEmailStatus() != JobCustomer.EmailStatus.FAILED
+                                    && jc.getEmailStatus() != JobCustomer.EmailStatus.SKIPPED) {
+                                jc.setEmailStatus(JobCustomer.EmailStatus.SENT);
+                                jc.setEmailSentAt(event.getEventTimestamp());
+                                Object msgId = event.getPayload() != null ? event.getPayload().get("sesMessageId") : null;
+                                if (msgId != null) jc.setSesMessageId(msgId.toString());
+                                jobRepository.incrementEmailSentCount(event.getJobId());
+                            }
                         }
                         case EMAIL_FAILED -> {
-                            jc.setEmailStatus(JobCustomer.EmailStatus.FAILED);
-                            // Persist the Lambda error message so the Exceptions UI can display the root cause
-                            Object err = event.getPayload() != null ? event.getPayload().get("error") : null;
-                            if (err != null && !err.toString().isBlank()) jc.setBounceReason(err.toString());
-                            jobRepository.incrementEmailFailedCount(event.getJobId());
+                            if (jc.getEmailStatus() != JobCustomer.EmailStatus.FAILED) {
+                                jc.setEmailStatus(JobCustomer.EmailStatus.FAILED);
+                                // Persist the Lambda error message so the Exceptions UI can display the root cause
+                                Object err = event.getPayload() != null ? event.getPayload().get("error") : null;
+                                if (err != null && !err.toString().isBlank()) jc.setBounceReason(err.toString());
+                                jobRepository.incrementEmailFailedCount(event.getJobId());
+                            }
                         }
                         case EMAIL_SKIPPED -> {
-                            jc.setEmailStatus(JobCustomer.EmailStatus.SKIPPED);
-                            jobRepository.incrementEmailSkippedCount(event.getJobId());
+                            if (jc.getEmailStatus() != JobCustomer.EmailStatus.SKIPPED) {
+                                jc.setEmailStatus(JobCustomer.EmailStatus.SKIPPED);
+                                jobRepository.incrementEmailSkippedCount(event.getJobId());
+                            }
                         }
                         case DELIVERY -> {
                             // Idempotency: only process if not already DELIVERED (SNS may retry)
@@ -240,6 +254,8 @@ public class PipelineService {
     private void checkAndCompleteJob(UUID jobId) {
         jobRepository.findById(jobId).ifPresent(job -> {
             int total = job.getTotalCustomers();
+            // JOB_REGISTERED payload may omit totalCustomers — fall back to CUSTOMER_REGISTERED count
+            if (total <= 0) total = (int) job.getProcessedCount();
             if (total <= 0) return;
 
             // Use job-level counters (incremented per raw event, including duplicate party codes).
@@ -255,6 +271,7 @@ public class PipelineService {
             if (job.getStatus() == Job.JobStatus.PROCESSING) {
                 long pdfDone = job.getPdfGeneratedCount() + pdfFailed;
                 if (pdfDone >= total) {
+                    if (job.getTotalCustomers() <= 0) job.setTotalCustomers(total);
                     job.setStatus(Job.JobStatus.EMAILING);
                     jobRepository.save(job);
                     log.info("Job transitioned to EMAILING | jobId={} | pdfDone={}/{}", jobId, pdfDone, total);
@@ -262,6 +279,7 @@ public class PipelineService {
             }
 
             if (done >= total) {
+                if (job.getTotalCustomers() <= 0) job.setTotalCustomers(total);
                 if (pdfFailed > 0 || emailFailed > 0 || job.getEmailBouncedCount() > 0) {
                     job.setStatus(Job.JobStatus.PARTIAL);
                 } else {

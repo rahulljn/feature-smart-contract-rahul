@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { bounceReportApi, useSegments } from "@/lib/api";
 import type { BounceRecord, Segment } from "@/types";
 import { Loader2, ChevronRight, Download, Search, Inbox } from "lucide-react";
@@ -23,7 +23,7 @@ function BounceBadge({ type }: { type: string }) {
 export default function ClientsPage() {
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState(
-    new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0]
+    new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0]
   );
   const [toDate, setToDate] = useState(new Date().toISOString().split("T")[0]);
   const [segment, setSegment] = useState("");
@@ -145,7 +145,7 @@ export default function ClientsPage() {
                 onKeyDown={(e) => { if (e.key === "Enter") handleLoadBounceReport(); }}
                 className="border rounded-lg px-3 py-1.5 text-sm w-40 font-mono uppercase"
               />
-              <p className="text-[10px] text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-400 mt-1">
                 Optional — leave blank to search all clients
               </p>
             </div>
@@ -171,6 +171,7 @@ export default function ClientsPage() {
                 onChange={(e) => setToDate(e.target.value)}
                 className="border rounded-lg px-3 py-1.5 text-sm"
               />
+              <p className="text-xs mt-1 invisible" aria-hidden="true">–</p>
             </div>
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">
@@ -179,7 +180,7 @@ export default function ClientsPage() {
               <select
                 value={segment}
                 onChange={(e) => setSegment(e.target.value)}
-                className="border rounded-lg px-3 py-2 bg-white text-sm"
+                className="border rounded-lg px-3 py-1.5 bg-white text-sm"
               >
                 <option value="">All Segments</option>
                 {segmentsLoading ? (
@@ -192,6 +193,7 @@ export default function ClientsPage() {
                   ))
                 )}
               </select>
+              <p className="text-xs mt-1 invisible" aria-hidden="true">–</p>
             </div>
             <div className="flex gap-2">
               <button
@@ -315,9 +317,8 @@ export default function ClientsPage() {
                   </tr>
                 ) : (
                   bounceRecords.map((record) => (
-                    <>
+                    <React.Fragment key={rowKey(record)}>
                       <tr
-                        key={rowKey(record)}
                         className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
                       >
                         <td className="px-4 py-3 font-mono text-sm text-[#497cff]">
@@ -351,7 +352,7 @@ export default function ClientsPage() {
                       </tr>
 
                       {expandedRow === rowKey(record) && (
-                        <tr key={`${rowKey(record)}-expanded`}>
+                        <tr>
                           <td colSpan={6} className="p-0">
                             <div className="bg-blue-50/30 px-6 py-4 border-b border-blue-100">
                               <div className="grid grid-cols-3 gap-x-8 gap-y-3 text-sm">
@@ -389,7 +390,7 @@ export default function ClientsPage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </React.Fragment>
                   ))
                 )}
               </tbody>

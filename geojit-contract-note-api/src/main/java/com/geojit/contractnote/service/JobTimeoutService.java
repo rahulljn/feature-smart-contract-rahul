@@ -37,9 +37,10 @@ public class JobTimeoutService {
         for (Job job : stuckJobs) {
             UUID jobId = job.getJobId();
             int total = job.getTotalCustomers();
-            if (total <= 0) continue;
-
             long registered   = jobCustomerRepository.countByJob_JobId(jobId);
+            // Fall back to registered customer count when JOB_REGISTERED payload omitted totalCustomers
+            if (total <= 0) total = (int) registered;
+            if (total <= 0) continue;
             long unregistered = Math.max(0, total - registered);
             long delivered    = jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.DELIVERED);
             long bounced      = jobCustomerRepository.countByJob_JobIdAndEmailStatus(jobId, JobCustomer.EmailStatus.BOUNCED);
@@ -48,6 +49,7 @@ public class JobTimeoutService {
             long hardBounced = jobCustomerRepository.countHardBouncedByJobId(jobId);
             long softBounced = jobCustomerRepository.countSoftBouncedByJobId(jobId);
 
+            if (job.getTotalCustomers() <= 0) job.setTotalCustomers(total);
             job.setFailedCount((int)(pdfFailed + unregistered));  // keep — used by completion logic
             job.setPdfFailedCount((int) pdfFailed);
             job.setInvalidRecordCount((int) unregistered);
