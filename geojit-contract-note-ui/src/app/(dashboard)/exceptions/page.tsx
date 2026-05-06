@@ -16,6 +16,7 @@ const LAMBDA_TABS = [
   { key: "Email", label: "Email" },
   { key: "Pull Bounce", label: "Pull Bounce" },
   { key: "Pull Delivery", label: "Pull Delivery" },
+  { key: "Status Consumer", label: "Status Consumer" },
 ];
 
 const LAMBDA_NAMES: Record<string, string> = {
@@ -26,6 +27,7 @@ const LAMBDA_NAMES: Record<string, string> = {
   "Email": "email-notification-geojit",
   "Pull Bounce": "pull-bounce-geojit",
   "Pull Delivery": "pull-delivery-geojit",
+  "Status Consumer": "status-consumer-geojit",
 };
 
 function formatExceptionDate(date?: string): string {

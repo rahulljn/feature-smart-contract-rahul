@@ -29,6 +29,8 @@ public interface PipelineEventRepository extends JpaRepository<PipelineEvent, Lo
 
     List<PipelineEvent> findTop10ByEventTimestampAfterOrderByEventTimestampDesc(LocalDateTime since);
 
+    List<PipelineEvent> findTop10ByEventTimestampBetweenOrderByEventTimestampDesc(LocalDateTime start, LocalDateTime end);
+
     /** Count recent events per type for throughput calculation (events in last N seconds) */
     @Query(value = """
             SELECT event_type, COUNT(*) AS cnt

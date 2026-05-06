@@ -69,6 +69,24 @@ function KpiCard({
   );
 }
 
+const eventStyle = (type: string): { icon: string; color: string } =>
+  ({
+    EMAIL_SENT:          { icon: "send",            color: "text-green-500"  },
+    DELIVERY:            { icon: "mark_email_read",  color: "text-teal-500"  },
+    EMAIL_FAILED:        { icon: "error",            color: "text-red-500"   },
+    BOUNCE:              { icon: "mail_off",          color: "text-amber-500" },
+    COMPLAINT:           { icon: "report",            color: "text-red-500"   },
+    PDF_GENERATED:       { icon: "picture_as_pdf",   color: "text-purple-500"},
+    PDF_FAILED:          { icon: "broken_image",     color: "text-red-500"   },
+    PDF_TRIGGERED:       { icon: "picture_as_pdf",   color: "text-purple-400"},
+    RESEND_TRIGGERED:    { icon: "refresh",           color: "text-blue-500"  },
+    SPLIT_PROGRESS:      { icon: "splitscreen",       color: "text-gray-400"  },
+    SPLIT_COMPLETE:      { icon: "splitscreen",       color: "text-gray-500"  },
+    JOB_REGISTERED:      { icon: "work",              color: "text-blue-400"  },
+    CUSTOMER_REGISTERED: { icon: "person_add",        color: "text-blue-400"  },
+    EMAIL_SKIPPED:       { icon: "block",             color: "text-gray-400"  },
+  } as Record<string, { icon: string; color: string }>)[type] ?? { icon: "info", color: "text-gray-400" };
+
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
   const [filter, setFilter] = useState<"today" | "7d" | "month">("today");
@@ -217,13 +235,13 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl border p-4">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <div className="text-base font-semibold text-gray-900">Open Rate &amp; Bounce Rate</div>
-              <div className="text-xs text-gray-400 mt-0.5">Engagement and reputation health — % rates over 12 months</div>
+              <div className="text-base font-semibold text-gray-900">Delivery Rate &amp; Bounce Rate</div>
+              <div className="text-xs text-gray-400 mt-0.5">Delivery and reputation health — % rates over 30 days</div>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-                <span className="text-xs text-gray-500">Open rate %</span>
+                <span className="text-xs text-gray-500">Delivery rate %</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-5 inline-block border-t-2 border-dashed border-amber-400" />
@@ -238,7 +256,7 @@ export default function DashboardPage() {
               <YAxis yAxisId="left" domain={[0, 100]} tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} />
               <YAxis yAxisId="right" orientation="right" domain={[0, "auto"]} tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} />
               <Tooltip content={<CustomTooltip />} />
-              <Area yAxisId="left" type="monotone" dataKey="openRate" name="Open Rate" stroke="#22c55e" fill="#22c55e" fillOpacity={0.1} strokeWidth={2} dot={false} />
+              <Area yAxisId="left" type="monotone" dataKey="openRate" name="Delivery Rate" stroke="#22c55e" fill="#22c55e" fillOpacity={0.1} strokeWidth={2} dot={false} />
               <Line yAxisId="right" type="monotone" dataKey="bounceRate" name="Bounce Rate" stroke="#f59e0b" strokeDasharray="4 4" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -311,11 +329,8 @@ export default function DashboardPage() {
             ) : (
               (m.recentActivity ?? []).map((item: any, i: number) => (
                 <div key={i} className="flex items-start gap-2.5">
-                  <span className="material-symbols-outlined text-[18px] flex-shrink-0 mt-0.5 text-blue-500">
-                    {item.eventType === "EMAIL_SENT" ? "send" :
-                     item.eventType === "PDF_GENERATED" ? "picture_as_pdf" :
-                     item.eventType === "EMAIL_FAILED" ? "error" :
-                     item.eventType === "DELIVERY" ? "mark_email_read" : "info"}
+                  <span className={cn("material-symbols-outlined text-[18px] flex-shrink-0 mt-0.5", eventStyle(item.eventType).color)}>
+                    {eventStyle(item.eventType).icon}
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-gray-700">{item.description}</div>

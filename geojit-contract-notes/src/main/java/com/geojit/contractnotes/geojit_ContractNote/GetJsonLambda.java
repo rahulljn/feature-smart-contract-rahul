@@ -46,6 +46,7 @@ public class GetJsonLambda implements RequestHandler<Object, Integer> {
 
 
         AWSLambda lambdaClient = null;
+        String jobId = "";  // traceId — propagated from Invoke Lambda
 
         try {
             // ── Step 1: Input se bucketName aur s3Key lo ──
@@ -54,6 +55,7 @@ public class GetJsonLambda implements RequestHandler<Object, Integer> {
 
             String bucketName = inputObject.getString("bucketName");
             String s3Key      = inputObject.getString("s3Key");
+            jobId             = inputObject.optString("jobId", "");
 
 //            System.out.println("Received S3 reference: " + bucketName + "/" + s3Key);
 
@@ -64,6 +66,7 @@ public class GetJsonLambda implements RequestHandler<Object, Integer> {
             JSONObject pdfPayload = new JSONObject();
             pdfPayload.put("bucketName", bucketName);
             pdfPayload.put("s3Key", s3Key);
+            if (!jobId.isEmpty()) pdfPayload.put("jobId", jobId);
 
             lambdaClient = AWSLambdaAsyncClient.builder()
                     .withRegion(AWS_REGION)
@@ -79,7 +82,7 @@ public class GetJsonLambda implements RequestHandler<Object, Integer> {
             return 200;
 
         } catch (Exception e) {
-            ExceptionPublisher.publish("", "GetJson", null, e);
+            ExceptionPublisher.publish(jobId, "json-lambda-geojit", null, e);
             logger.error("GetJsonLambda ERROR | error={} | endTime={}", e.getMessage(), istFormat.format(new Date()), e);
             return 500;
         } finally {

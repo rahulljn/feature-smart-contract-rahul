@@ -55,7 +55,7 @@ public class DashboardService {
         List<HourlyActivity> hourlyActivity = buildHourlyActivity(startDateTime, endDateTime);
 
         // Recent activity — last 10 pipeline events in the range
-        List<RecentActivity> recentActivity = buildRecentActivity(startDateTime);
+        List<RecentActivity> recentActivity = buildRecentActivity(startDateTime, endDateTime);
 
         return DashboardMetricsResponse.builder()
                 .totalCustomersInPipeline(totalCustomers)
@@ -98,11 +98,11 @@ public class DashboardService {
         return result;
     }
 
-    private List<RecentActivity> buildRecentActivity(LocalDateTime since) {
+    private List<RecentActivity> buildRecentActivity(LocalDateTime start, LocalDateTime end) {
         List<RecentActivity> result = new ArrayList<>();
         try {
             List<PipelineEvent> events = pipelineEventRepository
-                    .findTop10ByEventTimestampAfterOrderByEventTimestampDesc(since);
+                    .findTop10ByEventTimestampBetweenOrderByEventTimestampDesc(start, end);
 
             for (PipelineEvent e : events) {
                 String desc = describeEvent(e);

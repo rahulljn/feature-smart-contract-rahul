@@ -97,9 +97,12 @@ export const lambdaExceptionsApi = {
     api.get("/exceptions", { params: { jobId: jobId || undefined, lambdaName: lambdaName || undefined } }),
 };
 
+const localDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 export const dashboardApi = {
   metrics: (from?: Date, to?: Date) =>
-    api.get("/dashboard/metrics", { params: { from: from ? from.toISOString().split("T")[0] : undefined, to: to ? to.toISOString().split("T")[0] : undefined } }),
+    api.get("/dashboard/metrics", { params: { from: from ? localDateStr(from) : undefined, to: to ? localDateStr(to) : undefined } }),
   getMonthlyVolume: (year: number) =>
     api.get("/dashboard/monthly-volume", { params: { year } }),
   getDailySuccessRate: (days: 30 | 90) =>

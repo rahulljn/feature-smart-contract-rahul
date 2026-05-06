@@ -50,7 +50,8 @@ public class Split implements RequestHandler<S3Event, String> {
     String fileSuffix  = "";
     File remainingRecordsFile = null;
     String jobId = null;  // traceId from API — read from S3 object metadata
-    int totalCustomerCount = 0;   // tracked for JOB_REGISTERED event
+    int totalCustomerCount   = 0;  // valid customers only — used as the completion target in the API
+    int invalidCustomerCount = 0;  // rejected by field-count validation — reported to API for display
     String firstTradeDate  = null; // captured from first H record · included in JOB_REGISTERED + SPLIT_PROGRESS
 
     // ─── Field length constants (from actual data analysis) ───────────────────
@@ -188,10 +189,14 @@ public class Split implements RequestHandler<S3Event, String> {
                         if (currentCustomerHasHeader) {
                             writeCustomerData(currentCustomerLines, currentCustomerValid, customerCount);
                             customerCount++;
-                            totalCustomerCount++;
-                            // Send live progress every 1000 customers
-                            if (totalCustomerCount % 1000 == 0) {
-                                sendSplitProgressEvent(totalCustomerCount);
+                            if (currentCustomerValid) {
+                                totalCustomerCount++;
+                                // Send live progress every 1000 customers
+                                if (totalCustomerCount % 1000 == 0) {
+                                    sendSplitProgressEvent(totalCustomerCount);
+                                }
+                            } else {
+                                invalidCustomerCount++;
                             }
                         }
                         // Reset for new customer
@@ -238,13 +243,13 @@ public class Split implements RequestHandler<S3Event, String> {
 
             // Save last customer
             if (!currentCustomerLines.isEmpty()  && currentCustomerHasHeader) {
-//                System.out.println("--- Saving LAST customer #" + customerCount +
-//                        " (ID: " + currentCustomerId +
-//                        ", Valid: " + currentCustomerValid +
-//                        ", Lines: " + currentCustomerLines.size() + ")");
                 writeCustomerData(currentCustomerLines, currentCustomerValid, customerCount);
                 customerCount++;
-                totalCustomerCount++;
+                if (currentCustomerValid) {
+                    totalCustomerCount++;
+                } else {
+                    invalidCustomerCount++;
+                }
             } else {
                 logger.info("WARNING: Last customer lines are EMPTY!");
             }
@@ -438,7 +443,8 @@ public class Split implements RequestHandler<S3Event, String> {
         }
         try {
             JSONObject payload = new JSONObject();
-            payload.put("totalCustomers", totalCustomerCount);
+            payload.put("totalCustomers", totalCustomerCount);   // valid customers only
+            payload.put("invalidCustomers", invalidCustomerCount); // rejected by field-count validation
             payload.put("fileName", s3FileName != null ? s3FileName : "unknown");
             payload.put("tradeDate", firstTradeDate != null ? firstTradeDate : "");
 
@@ -458,7 +464,7 @@ public class Split implements RequestHandler<S3Event, String> {
             sqsClient.sendMessage(msgRequest);
             sqsClient.shutdown();
 
-            logger.info("JOB_REGISTERED event sent | jobId={} | totalCustomers={}", jobId, totalCustomerCount);
+            logger.info("JOB_REGISTERED event sent | jobId={} | totalCustomers={} | invalidCustomers={}", jobId, totalCustomerCount, invalidCustomerCount);
         } catch (Exception e) {
             logger.error("Error sending JOB_REGISTERED event: {}", e.getMessage(), e);
         }

@@ -36,8 +36,11 @@ public class JobResponse {
 
     public static JobResponse from(Job job) {
         int total = job.getTotalCustomers();
-        // Progress: use emailSent+emailBounced+failed as "done" (delivery events may not arrive in sandbox)
-        int done = job.getEmailSentCount() + job.getEmailBouncedCount() + job.getFailedCount();
+        // Must match checkAndCompleteJob formula exactly.
+        // emailBouncedCount is NOT included — bounced customers are already counted in emailSentCount
+        // (EMAIL_SENT fires before BOUNCE). Including both would double-count them.
+        int done = job.getEmailSentCount() + job.getEmailFailedCount()
+                + job.getEmailSkippedCount() + job.getFailedCount();
         int progress = total > 0 ? Math.min(100, (int) Math.round((double) done / total * 100)) : 0;
 
         return JobResponse.builder()

@@ -103,12 +103,14 @@ public class StatusConsumerLambda implements RequestHandler<Object, String> {
                     } catch (Exception e) {
                         failedCount++;
                         logger.error("Error processing status message: {}", e.getMessage(), e);
+                        ExceptionPublisher.publish("", "status-consumer-geojit", null, e);
                     }
                 }
             } while (!messages.isEmpty());
 
         } catch (Exception e) {
             logger.error("StatusConsumerLambda fatal error: {}", e.getMessage(), e);
+            ExceptionPublisher.publish("", "status-consumer-geojit", null, e);
         } finally {
             if (sqsClient != null) {
                 try { sqsClient.shutdown(); } catch (Exception ignored) {}

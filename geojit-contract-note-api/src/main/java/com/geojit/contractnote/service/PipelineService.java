@@ -60,6 +60,14 @@ public class PipelineService {
                     if (total != null) {
                         try { job.setTotalCustomers(Integer.parseInt(total.toString())); } catch (NumberFormatException ignored) {}
                     }
+                    // Store invalid customer count from Split Lambda validation
+                    Object invalid = event.getPayload().get("invalidCustomers");
+                    if (invalid != null) {
+                        try {
+                            int invalidCount = Integer.parseInt(invalid.toString());
+                            if (invalidCount > 0) job.setInvalidRecordCount(invalidCount);
+                        } catch (NumberFormatException ignored) {}
+                    }
                     Object fileName = event.getPayload().get("fileName");
                     if (fileName != null && (job.getFileName() == null || job.getFileName().isBlank())) {
                         job.setFileName(fileName.toString());
@@ -140,15 +148,20 @@ public class PipelineService {
                             }
                         }
                         case EMAIL_SENT -> {
-                            if (jc.getEmailStatus() != JobCustomer.EmailStatus.SENT
-                                    && jc.getEmailStatus() != JobCustomer.EmailStatus.DELIVERED
-                                    && jc.getEmailStatus() != JobCustomer.EmailStatus.BOUNCED
-                                    && jc.getEmailStatus() != JobCustomer.EmailStatus.FAILED
-                                    && jc.getEmailStatus() != JobCustomer.EmailStatus.SKIPPED) {
+                            // Always capture sesMessageId if not yet recorded
+                            Object msgId = event.getPayload() != null ? event.getPayload().get("sesMessageId") : null;
+                            if (msgId != null && jc.getSesMessageId() == null) {
+                                jc.setSesMessageId(msgId.toString());
+                            }
+                            // Advance to SENT only if still PENDING — never regress from DELIVERED/BOUNCED
+                            if (jc.getEmailStatus() == JobCustomer.EmailStatus.PENDING) {
                                 jc.setEmailStatus(JobCustomer.EmailStatus.SENT);
+                            }
+                            // Count once, guarded by emailSentAt. When SES events (DELIVERY/BOUNCE)
+                            // arrive before this Lambda event, emailSentAt is still null even though
+                            // emailStatus is already advanced — so the counter still gets incremented.
+                            if (jc.getEmailSentAt() == null) {
                                 jc.setEmailSentAt(event.getEventTimestamp());
-                                Object msgId = event.getPayload() != null ? event.getPayload().get("sesMessageId") : null;
-                                if (msgId != null) jc.setSesMessageId(msgId.toString());
                                 jobRepository.incrementEmailSentCount(event.getJobId());
                             }
                         }
@@ -258,14 +271,11 @@ public class PipelineService {
             if (total <= 0) total = (int) job.getProcessedCount();
             if (total <= 0) return;
 
-            // Use job-level counters (incremented per raw event, including duplicate party codes).
-            // Counting job_customers rows would be wrong when a file has multiple rows for the
-            // same party code — those rows are deduplicated in job_customers but each one still
-            // generates a real PDF and email that must be counted toward completion.
-            long pdfFailed   = job.getFailedCount();       // running count from PDF_FAILED events
-            long emailSent   = job.getEmailSentCount();    // running count from EMAIL_SENT events
-            long emailFailed = job.getEmailFailedCount();  // running count from EMAIL_FAILED + EMAIL_SKIPPED events
-            long done        = emailSent + emailFailed + pdfFailed;
+            long pdfFailed    = job.getFailedCount();          // PDF_FAILED events
+            long emailSent    = job.getEmailSentCount();       // EMAIL_SENT events
+            long emailFailed  = job.getEmailFailedCount();     // EMAIL_FAILED events
+            long emailSkipped = job.getEmailSkippedCount();    // EMAIL_SKIPPED (suppression list) events
+            long done         = emailSent + emailFailed + emailSkipped + pdfFailed;
 
             // PROCESSING → EMAILING
             if (job.getStatus() == Job.JobStatus.PROCESSING) {
