@@ -50,11 +50,6 @@ public class BounceReportController {
             return ResponseEntity.badRequest().body(
                     ApiResponse.error("from must be before or equal to to"));
         }
-        long daysDiff = java.time.temporal.ChronoUnit.DAYS.between(from, to);
-        if (daysDiff > 15) {
-            return ResponseEntity.badRequest().body(
-                    ApiResponse.error("Date range cannot exceed 15 days"));
-        }
 
         List<BounceRecord> records = s3BounceService.listBounceRecords(from, to, segment);
         BounceListResponse response = new BounceListResponse(records, records.size(), from, to, segment);
@@ -82,11 +77,6 @@ public class BounceReportController {
         if (from.isAfter(to)) {
             return ResponseEntity.badRequest().body(
                     ApiResponse.error("from must be before or equal to to"));
-        }
-        long daysDiff = java.time.temporal.ChronoUnit.DAYS.between(from, to);
-        if (daysDiff > 15) {
-            return ResponseEntity.badRequest().body(
-                    ApiResponse.error("Date range cannot exceed 15 days"));
         }
 
         List<BounceRecord> records = s3BounceService.getClientBounceRecords(partyCode, from, to, segment);
@@ -132,10 +122,6 @@ public class BounceReportController {
         if (from.isAfter(to)) {
             return ResponseEntity.badRequest().build();
         }
-        long daysDiff = java.time.temporal.ChronoUnit.DAYS.between(from, to);
-        if (daysDiff > 15) {
-            return ResponseEntity.badRequest().build();
-        }
 
         try {
             byte[] csvBytes = s3BounceService.downloadAllReportsMerged(from, to, segment);
@@ -159,7 +145,7 @@ public class BounceReportController {
 
         log.info("Resend requested for partyCode [{}] fileName [{}]", request.partyCode, request.fileName);
 
-        s3BounceService.resendBounce(request.partyCode, request.fileName);
+        s3BounceService.resendBounce(request.partyCode, request.fileName, request.email);
         return ResponseEntity.ok(ApiResponse.ok(
                 "Resend queued successfully",
                 new ResendBounceResult(request.partyCode, null, "QUEUED", "Resend queued successfully")
@@ -180,7 +166,7 @@ public class BounceReportController {
 
         for (ResendBounceRequest item : request.getRecords()) {
             try {
-                s3BounceService.resendBounce(item.getPartyCode(), item.getFileName());
+                s3BounceService.resendBounce(item.getPartyCode(), item.getFileName(), item.getEmail());
                 results.add(new ResendBounceResult(item.getPartyCode(), null, "QUEUED", "Resend queued successfully"));
                 queued++;
             } catch (Exception e) {
@@ -200,6 +186,7 @@ public class BounceReportController {
     public static class ResendBounceRequest {
         private String partyCode;
         private String fileName;
+        private String email;
     }
 
     @lombok.Data

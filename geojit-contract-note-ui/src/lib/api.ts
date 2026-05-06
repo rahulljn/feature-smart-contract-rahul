@@ -245,11 +245,11 @@ export const bounceReportApi = {
   downloadAll: (params: { from?: string; to?: string; segment?: string }) =>
     api.get("/bounce-report/download-all", { params, responseType: "blob" }),
 
-  resend: (partyCode: string, fileName: string) =>
+  resend: (partyCode: string, fileName: string, email?: string) =>
     api.post<ApiResponse<ResendBounceResult>>(
-      "/bounce-report/resend", { partyCode, fileName }),
+      "/bounce-report/resend", { partyCode, fileName, email }),
 
-  resendBulk: (records: { partyCode: string; fileName: string }[]) =>
+  resendBulk: (records: { partyCode: string; fileName: string; email?: string }[]) =>
     api.post<ApiResponse<{
       queued: number; failed: number; results: ResendBounceResult[]
     }>>("/bounce-report/resend-bulk", { records }),

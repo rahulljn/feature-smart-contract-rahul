@@ -45,7 +45,7 @@ function ResendPageContent() {
     return diff >= 0;
   }, [from, to]);
 
-  const rowKey = useCallback((r: BounceRecord) => `${r.partyCode}_${r.fileName}`, []);
+  const rowKey = useCallback((r: BounceRecord, idx: number) => `${r.partyCode}_${r.s3Key}_${idx}`, []);
 
   const paginatedRecords = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -60,7 +60,7 @@ function ResendPageContent() {
     try {
       if (clientCodeSearch.trim()) {
         const res = await bounceReportApi.getClientRecords(clientCodeSearch.trim(), { from, to, segment: segmentCode || undefined });
-        setRecords(res.data?.data ?? []);
+        setRecords(Array.isArray(res.data?.data) ? res.data.data : []);
       } else {
         const res = await bounceReportApi.list({ from, to, segment: segmentCode || undefined });
         setRecords(res.data?.data?.records ?? []);
@@ -73,8 +73,8 @@ function ResendPageContent() {
   };
 
   const resendMutation = useMutation({
-    mutationFn: async ({ partyCode, fileName }: { partyCode: string; fileName: string }) => {
-      return bounceReportApi.resend(partyCode, fileName);
+    mutationFn: async ({ partyCode, fileName, email }: { partyCode: string; fileName: string; email?: string }) => {
+      return bounceReportApi.resend(partyCode, fileName, email);
     },
     onSuccess: () => {
       toast.success('Resend queued successfully');
@@ -96,11 +96,11 @@ function ResendPageContent() {
     },
   });
 
-  const resendSingle = async (record: BounceRecord) => {
-    const rk = rowKey(record);
+  const resendSingle = async (record: BounceRecord, idx: number) => {
+    const rk = rowKey(record, idx);
     setResendingId(rk);
     try {
-      await resendMutation.mutateAsync({ partyCode: record.partyCode, fileName: record.fileName });
+      await resendMutation.mutateAsync({ partyCode: record.partyCode, fileName: record.fileName, email: record.clientEmail });
       setResentIds(prev => new Set([...prev, rk]));
       toast.success(`Resend queued for ${record.partyCode}`);
     } catch {
@@ -112,13 +112,9 @@ function ResendPageContent() {
 
   const resendBulk = async () => {
     if (selectedRows.size === 0) return;
-    const recordsToResend = Array.from(selectedRows)
-      .map(key => {
-        const [partyCode, ...rest] = key.split('_');
-        const fileName = rest.join('_');
-        return { partyCode, fileName };
-      })
-      .filter(r => r.partyCode && r.fileName);
+    const recordsToResend = paginatedRecords
+      .filter((r, i) => selectedRows.has(rowKey(r, i)))
+      .map(r => ({ partyCode: r.partyCode, fileName: r.fileName, email: r.clientEmail }));
 
     try {
       await resendBulkMutation.mutateAsync(recordsToResend);
@@ -147,68 +143,63 @@ function ResendPageContent() {
           <div className="flex items-end gap-3 flex-wrap">
             {/* Client Code */}
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">CLIENT CODE</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">CLIENT CODE <span className="text-slate-400 normal-case font-normal">(optional)</span></label>
               <input
                 type="text"
-                placeholder="e.g. ZYR175 (optional)"
+                placeholder="e.g. ZYR175"
                 value={clientCodeSearch}
                 onChange={e => setClientCodeSearch(e.target.value.toUpperCase())}
                 className="border rounded-lg px-3 py-1.5 text-sm w-40 font-mono uppercase" />
-              <p className="text-xs text-gray-400 mt-1">
-                Leave blank to search all clients
-              </p>
             </div>
 
             {/* From date */}
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">TRADE DATE FROM</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">TRADE DATE FROM <span className="text-red-500">*</span></label>
               <input
                 type="date"
                 value={from}
                 onChange={e => setFrom(e.target.value)}
                 className="border rounded-lg px-3 py-1.5 text-sm"
               />
-              <p className="text-xs text-gray-400 italic mt-1">Enter trade date range, not today's date</p>
             </div>
 
             {/* To date */}
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">TRADE DATE TO</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">TRADE DATE TO <span className="text-red-500">*</span></label>
               <input
                 type="date"
                 value={to}
                 onChange={e => setTo(e.target.value)}
                 className="border rounded-lg px-3 py-1.5 text-sm"
               />
-              <p className="text-xs mt-1 invisible" aria-hidden="true">–</p>
             </div>
 
             {/* Segment dropdown */}
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">SEGMENT</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1.5">SEGMENT <span className="text-red-500">*</span></label>
               <select
                 value={segmentCode}
                 onChange={e => setSegmentCode(e.target.value)}
                 className="border rounded-lg px-3 py-1.5 bg-white text-sm"
               >
-                <option value="">All Segments</option>
+                <option value="">Select segment…</option>
                 {segments.map((s: Segment) => (
                   <option key={s.code} value={s.code}>{s.displayName}</option>
                 ))}
               </select>
-              <p className="text-xs mt-1 invisible" aria-hidden="true">–</p>
             </div>
 
             {/* Search button */}
             <button
               onClick={handleSearch}
-              disabled={!dateRangeValid || loading}
-              className="px-4 py-2 bg-[#00174b] text-white rounded-lg text-sm font-bold hover:bg-[#003ea8] disabled:opacity-50 flex items-center gap-1.5"
+              disabled={!from || !to || !segmentCode || !dateRangeValid || loading}
+              className="px-4 py-[7px] bg-[#00174b] text-white rounded-lg text-sm font-bold hover:bg-[#003ea8] disabled:opacity-50 flex items-center gap-1.5"
             >
               {loading ? <RefreshCw className="animate-spin h-3.5 w-3.5" /> : <Search className="h-3.5 w-4" />}
               Search
             </button>
           </div>
+          <p className="text-xs text-gray-400 italic mt-2">Enter trade date range for the bounce records, not today's date</p>
 
           {!dateRangeValid && (
             <p className="text-red-500 text-xs mt-2">⚠ "To" date must be on or after "From" date</p>
@@ -228,7 +219,7 @@ function ResendPageContent() {
               checked={selectedRows.size === paginatedRecords.length && paginatedRecords.length > 0}
               onChange={e => {
                 if (e.target.checked) {
-                  setSelectedRows(new Set(paginatedRecords.map(rowKey)));
+                  setSelectedRows(new Set(paginatedRecords.map((r, i) => rowKey(r, i))));
                 } else {
                   setSelectedRows(new Set());
                 }
@@ -301,19 +292,20 @@ function ResendPageContent() {
                     </div>
                   </td>
                 </tr>
-              ) : paginatedRecords.map(record => (
-                <React.Fragment key={rowKey(record)}>
+              ) : paginatedRecords.map((record, idx) => (
+                <React.Fragment key={rowKey(record, idx)}>
                   <tr className={cn(
                     "border-b border-slate-100 hover:bg-slate-50 transition-colors",
-                    selectedRows.has(rowKey(record)) && "bg-blue-50/40"
+                    selectedRows.has(rowKey(record, idx)) && "bg-blue-50/40"
                   )}>
                     <td className="px-3 py-3 text-center">
                       <input
                         type="checkbox"
-                        checked={selectedRows.has(rowKey(record))}
+                        checked={selectedRows.has(rowKey(record, idx))}
                         onChange={() => {
+                          const rk = rowKey(record, idx);
                           const ns = new Set(selectedRows);
-                          ns.has(rowKey(record)) ? ns.delete(rowKey(record)) : ns.add(rowKey(record));
+                          ns.has(rk) ? ns.delete(rk) : ns.add(rk);
                           setSelectedRows(ns);
                         }}
                       />
@@ -335,7 +327,7 @@ function ResendPageContent() {
                     </td>
                     <td className="px-4 py-3">
                       {(() => {
-                        const rk = rowKey(record);
+                        const rk = rowKey(record, idx);
                         if (resentIds.has(rk)) {
                           return (
                             <span className="text-green-600 text-xs font-medium flex items-center gap-1">
@@ -354,7 +346,7 @@ function ResendPageContent() {
                         }
                         return (
                           <button
-                            onClick={() => resendSingle(record)}
+                            onClick={() => resendSingle(record, idx)}
                             className="border border-[#00174b] text-[#00174b] rounded px-2 py-1 text-xs hover:bg-[#00174b] hover:text-white transition"
                           >
                             Resend
@@ -364,15 +356,15 @@ function ResendPageContent() {
                     </td>
                     <td className="px-3 py-3 text-center">
                       <button
-                        onClick={() => setExpandedRow(expandedRow === rowKey(record) ? null : rowKey(record))}
+                        onClick={() => setExpandedRow(expandedRow === rowKey(record, idx) ? null : rowKey(record, idx))}
                         className="text-slate-400 hover:text-slate-600"
                       >
-                        <ChevronRight className={cn("h-5 w-5 transition-transform", expandedRow === rowKey(record) && "rotate-90")} />
+                        <ChevronRight className={cn("h-5 w-5 transition-transform", expandedRow === rowKey(record, idx) && "rotate-90")} />
                       </button>
                     </td>
                   </tr>
 
-                  {expandedRow === rowKey(record) && (
+                  {expandedRow === rowKey(record, idx) && (
                     <tr>
                       <td colSpan={8} className="p-0">
                         <div className="bg-blue-50/30 px-6 py-4 border-b border-blue-100">

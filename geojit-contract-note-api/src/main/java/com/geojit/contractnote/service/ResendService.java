@@ -290,7 +290,7 @@ public class ResendService {
      * @param toEmail    destination email (may be an override, not necessarily customer's registered email)
      * @param templateId optional template ID override; if null uses active template
      */
-    private String sendEmailDirectly(Job job, JobCustomer customer, String toEmail, UUID templateId) {
+    String sendEmailDirectly(Job job, JobCustomer customer, String toEmail, UUID templateId) {
         // Resolve active SES config
         List<SesConfig> activeConfigs = sesConfigRepository.findByIsActiveTrueOrderByConfigSetNameAsc();
         String configSetName = activeConfigs.isEmpty() ? "geojit-config-set"

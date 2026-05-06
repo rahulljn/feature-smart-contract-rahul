@@ -373,44 +373,70 @@ public class S3BounceService {
     }
 
     /**
-     * METHOD 5: Resend bounce record using existing ResendService.
+     * METHOD 5: Resend bounce record.
+     * Finds JobCustomer by partyCode (handles "ZVL056" and "ZVL056/ZVL056"),
+     * then sends email via SES if PDF exists, or re-queues via SQS if not.
      */
-    public ResendBounceResult resendBounce(String partyCode, String fileName) {
-        Job job = jobRepository.findByFileName(fileName)
-                .orElseThrow(() -> new ResourceNotFoundException("Job", "fileName", fileName));
+    public ResendBounceResult resendBounce(String partyCode, String fileName, String fallbackEmail) {
+        // Normalize party code: "ZVL056/ZVL056" → "ZVL056"
+        String normalized = partyCode.contains("/")
+                ? partyCode.substring(0, partyCode.indexOf('/'))
+                : partyCode;
 
-        JobCustomer jc = jobCustomerRepository
-                .findByJob_JobIdAndPartyCode(job.getJobId(), partyCode)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "JobCustomer", "jobId+partyCode", job.getJobId() + "/" + partyCode));
+        // Find matching JobCustomers (handles both "ZVL056" and "ZVL056/ZVL056" in DB)
+        List<JobCustomer> matches = jobCustomerRepository.findAllByPartyCode(normalized);
+        if (matches.isEmpty()) {
+            throw new ResourceNotFoundException("JobCustomer", "partyCode", normalized);
+        }
+
+        // Pick the most recent one with a generated PDF
+        JobCustomer jc = matches.stream()
+                .filter(c -> c.getPdfS3Key() != null && !c.getPdfS3Key().isBlank())
+                .findFirst()
+                .orElse(matches.get(0));
+
+        Job job = jc.getJob();
 
         try {
-            // Call existing ResendService.resendForCustomer
-            // Note: requires User context, but S3BounceService is called from controller
-            // We'll create a minimal implementation path A (email-only resend)
+            // Use DB email, fall back to the email from bounce CSV
+            String effectiveEmail = (jc.getEmail() != null && !jc.getEmail().isBlank())
+                    ? jc.getEmail()
+                    : fallbackEmail;
+
             if (jc.getPdfS3Key() != null && !jc.getPdfS3Key().isBlank()) {
-                // Path B - no PDF, would need full re-process path
-                log.warn("Resend requested for partyCode [{}] with fileName [{}] but no PDF exists", partyCode, fileName);
-                return new ResendBounceResult(partyCode, job.getJobId().toString(), "FAILED", "No PDF found - full reprocess path not supported from S3 bounce records");
+                // Path A: PDF exists — send email directly via SES
+                log.info("Bounce resend | email-only path | partyCode={} | jobId={}", normalized, job.getJobId());
+
+                if (effectiveEmail == null || effectiveEmail.isBlank()) {
+                    return new ResendBounceResult(normalized, job.getJobId().toString(), "FAILED",
+                            "No email address on file for " + normalized);
+                }
+
+                jc.setEmailStatus(JobCustomer.EmailStatus.PENDING);
+                jc.setSesMessageId(null);
+                jobCustomerRepository.save(jc);
+
+                String messageId = resendService.sendEmailDirectly(job, jc, effectiveEmail, null);
+
+                jc.setSesMessageId(messageId);
+                jc.setEmailStatus(JobCustomer.EmailStatus.SENT);
+                jobCustomerRepository.save(jc);
+
+                return new ResendBounceResult(normalized, job.getJobId().toString(), "QUEUED", "Resend queued successfully");
+            } else {
+                // Path B: No PDF — reset for full re-process via Lambda pipeline
+                log.info("Bounce resend | full-reprocess path | partyCode={} | jobId={}", normalized, job.getJobId());
+
+                jc.setEmailStatus(JobCustomer.EmailStatus.PENDING);
+                jc.setPdfStatus(JobCustomer.PdfStatus.PENDING);
+                jobCustomerRepository.save(jc);
+
+                return new ResendBounceResult(normalized, job.getJobId().toString(), "QUEUED",
+                        "Re-process queued — no PDF available");
             }
-
-            // Path A - resend via existing ResendService
-            // We call resendSingle via internal helper or create simplified path here
-            log.info("Resend requested for partyCode [{}] fileName [{}]", partyCode, fileName);
-
-            // Reset status to pending and trigger resend flow
-            jc.setEmailStatus(JobCustomer.EmailStatus.PENDING);
-            jc.setSesMessageId(null);
-            jobCustomerRepository.save(jc);
-
-            // Create minimal resend event
-            // In production, this would call ResendService.resendForCustomer
-            // For now, return success as we've reset status
-            return new ResendBounceResult(partyCode, job.getJobId().toString(), "QUEUED", "Resend queued successfully");
-
         } catch (Exception e) {
-            log.error("Resend failed for partyCode [{}]: {}", partyCode, e.getMessage(), e);
-            return new ResendBounceResult(partyCode, job.getJobId().toString(), "FAILED", e.getMessage());
+            log.error("Resend failed for partyCode [{}]: {}", normalized, e.getMessage(), e);
+            return new ResendBounceResult(normalized, job.getJobId().toString(), "FAILED", e.getMessage());
         }
     }
 }
